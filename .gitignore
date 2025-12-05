@@ -1,0 +1,46 @@
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code
+.claude/
+
+# OS Generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Development/Build artifacts
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+
+# Icon source files (not needed for extension)
+icons/*.svg
+icons/generate-icons.html
+
+# Archives
+*.zip
+*.crx
+*.pem
+
+# Local development
+.env
+.env.local
+*.local
+
+# Test files
+test/
+tests/
+*.test.js
+*.spec.js

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitch Drops Tracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-title">
+        <span class="header-icon">🎮</span>
+        <span>Twitch Drops</span>
+      </div>
+      <div class="header-actions">
+        <button id="clear-cache-btn" class="icon-btn" title="Clear Cache">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+        <button id="refresh-btn" class="icon-btn" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="campaigns">Campaigns</button>
+      <button class="tab" data-tab="progress">My Progress</button>
+    </div>
+
+    <!-- Campaigns Tab Content -->
+    <div id="campaigns-tab" class="tab-content active">
+      <div id="campaigns-list" class="campaigns-list">
+        <!-- Loading state -->
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Click refresh to load campaigns</p>
+        </div>
+      </div>
+      <div class="tab-footer two-buttons">
+        <button id="open-campaigns-btn" class="link-btn">
+          🔗 Open Page
+        </button>
+        <button id="load-all-drops-btn" class="link-btn primary">
+          📥 Load All Drop Details
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress Tab Content -->
+    <div id="progress-tab" class="tab-content">
+      <div id="progress-list" class="progress-list">
+        <!-- Loading state -->
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Click refresh to load progress</p>
+        </div>
+      </div>
+      <div class="tab-footer">
+        <button id="open-inventory-btn" class="link-btn">
+          🔗 Open Inventory Page
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span id="last-updated">Never updated</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
