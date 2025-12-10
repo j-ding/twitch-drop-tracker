@@ -256,7 +256,10 @@ const campaignMerger = {
     return campaigns.map(campaign => {
       const completedInfo = completedCampaigns[campaign.id];
 
-      const drops = campaign.drops.map(drop => {
+      // Deduplicate drops by ID (in case of duplicates from multiple sources)
+      const uniqueDrops = this.deduplicateDrops(campaign.drops);
+
+      const drops = uniqueDrops.map(drop => {
         const progress = progressMap.get(drop.id);
         // Check if drop was claimed within this campaign's date range
         const claimedByName = this.isDropClaimedForCampaign(
@@ -271,6 +274,14 @@ const campaignMerger = {
         return drop;
       });
 
+      // Sort drops by startAt date if available, otherwise by name
+      drops.sort((a, b) => {
+        if (a.startAt && b.startAt) {
+          return new Date(a.startAt) - new Date(b.startAt);
+        }
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
       const isCompleted = this.checkCompletion(drops, completedInfo);
 
       return {
@@ -280,6 +291,30 @@ const campaignMerger = {
         completedDropCount: drops.filter(d => d.status === 'claimed').length
       };
     });
+  },
+
+  /**
+   * Remove duplicate drops by ID, keeping the one with more data
+   */
+  deduplicateDrops(drops) {
+    const dropMap = new Map();
+    for (const drop of drops) {
+      if (!drop.id) continue;
+      const existing = dropMap.get(drop.id);
+      if (!existing) {
+        dropMap.set(drop.id, drop);
+      } else {
+        // Keep the drop with more information
+        const existingScore = (existing.name ? 1 : 0) + (existing.imageUrl ? 1 : 0) + (existing.requiredMinutes ? 1 : 0);
+        const newScore = (drop.name ? 1 : 0) + (drop.imageUrl ? 1 : 0) + (drop.requiredMinutes ? 1 : 0);
+        if (newScore > existingScore) {
+          dropMap.set(drop.id, { ...existing, ...drop });
+        } else {
+          dropMap.set(drop.id, { ...drop, ...existing });
+        }
+      }
+    }
+    return Array.from(dropMap.values());
   },
 
   buildClaimedDropsMap(completedGames, gameEventDrops) {

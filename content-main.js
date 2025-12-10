@@ -89,14 +89,74 @@
 
     /**
      * Extract single campaign details (when expanded)
+     * Now handles complex campaigns with drops spread across multiple structures
      */
     campaignDetails(data) {
       const sources = Array.isArray(data) ? data : [data];
       for (const item of sources) {
         const campaign = item?.data?.dropCampaign || item?.data?.user?.dropCampaign;
-        if (campaign?.id && campaign?.timeBasedDrops) return campaign;
+        if (campaign?.id) {
+          // Collect ALL timeBasedDrops from the campaign, including nested ones
+          const allDrops = this.collectAllDrops(campaign);
+          if (allDrops.length > 0) {
+            return { ...campaign, timeBasedDrops: allDrops };
+          }
+        }
       }
       return null;
+    },
+
+    /**
+     * Recursively collect ALL timeBasedDrops from a campaign object
+     * Handles complex structures where drops are nested in channels, days, etc.
+     */
+    collectAllDrops(obj, depth = 0, seenIds = new Set()) {
+      const drops = [];
+      if (!obj || typeof obj !== 'object' || depth > 10) return drops;
+
+      // Direct timeBasedDrops array
+      if (Array.isArray(obj.timeBasedDrops)) {
+        for (const drop of obj.timeBasedDrops) {
+          if (drop?.id && !seenIds.has(drop.id)) {
+            seenIds.add(drop.id);
+            drops.push(drop);
+          }
+        }
+      }
+
+      // Check for drops in allow/channels structures (common in multi-channel campaigns)
+      if (obj.allow?.channels) {
+        for (const channel of obj.allow.channels) {
+          drops.push(...this.collectAllDrops(channel, depth + 1, seenIds));
+        }
+      }
+
+      // Check for eventBasedDrops (some campaigns use this)
+      if (Array.isArray(obj.eventBasedDrops)) {
+        for (const drop of obj.eventBasedDrops) {
+          if (drop?.id && !seenIds.has(drop.id)) {
+            seenIds.add(drop.id);
+            drops.push(drop);
+          }
+        }
+      }
+
+      // Recurse into arrays and objects to find nested drops
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          drops.push(...this.collectAllDrops(item, depth + 1, seenIds));
+        }
+      } else {
+        for (const [key, val] of Object.entries(obj)) {
+          // Skip already processed keys and non-objects
+          if (key === 'timeBasedDrops' || key === 'eventBasedDrops') continue;
+          if (val && typeof val === 'object') {
+            drops.push(...this.collectAllDrops(val, depth + 1, seenIds));
+          }
+        }
+      }
+
+      return drops;
     },
 
     /**
@@ -160,13 +220,28 @@
 
     /**
      * Search for timeBasedDrops in nested response
+     * Enhanced to merge drops instead of replacing
      */
     searchDropsInResponse(obj, depth = 0) {
-      if (!obj || typeof obj !== 'object' || depth > 6) return;
+      if (!obj || typeof obj !== 'object' || depth > 8) return;
 
-      if (obj.timeBasedDrops?.length > 0 && obj.id) {
-        state.details = { ...state.details, [obj.id]: obj.timeBasedDrops };
-        dispatchCampaigns();
+      // Found a campaign-like object with an ID
+      if (obj.id && typeof obj.id === 'string') {
+        const allDrops = this.collectAllDrops(obj);
+        if (allDrops.length > 0) {
+          // Merge with existing drops for this campaign
+          const existingDrops = state.details[obj.id] || [];
+          const existingIds = new Set(existingDrops.map(d => d.id));
+          const newDrops = allDrops.filter(d => !existingIds.has(d.id));
+
+          if (newDrops.length > 0) {
+            state.details = {
+              ...state.details,
+              [obj.id]: [...existingDrops, ...newDrops]
+            };
+            dispatchCampaigns();
+          }
+        }
       }
 
       const items = Array.isArray(obj) ? obj : Object.values(obj);
