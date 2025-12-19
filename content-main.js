@@ -378,7 +378,12 @@
      * Expand all campaigns sequentially
      */
     async expandAll() {
-      notification.show('Loading drop details...', false, true);
+      notification.show('Loading drop details... (zooming out)', false, true);
+
+      // Save original zoom and zoom out to 50% to see more campaigns
+      this.originalZoom = document.body.style.zoom || '100%';
+      document.body.style.zoom = '50%';
+
       await this.delay(CONFIG.PAGE_LOAD_DELAY);
 
       let totalExpanded = 0;
@@ -441,6 +446,9 @@
      * Finalize expansion process
      */
     finalize(totalExpanded) {
+      // Restore original zoom level
+      document.body.style.zoom = this.originalZoom || '100%';
+
       dispatchCampaigns();
       window.history.replaceState({}, '', window.location.pathname);
       window.scrollTo(0, 0);
