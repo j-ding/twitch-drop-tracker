@@ -378,7 +378,10 @@
      * Expand all campaigns sequentially
      */
     async expandAll() {
-      notification.show('Loading drop details... (zooming out)', false, true);
+      notification.show('⚠️ Keep this tab focused! Loading drops...', false, true);
+
+      // Try to keep the tab active by requesting visibility
+      this.keepTabActive();
 
       // Save original zoom and zoom out to 50% to see more campaigns
       this.originalZoom = document.body.style.zoom || '100%';
@@ -446,6 +449,9 @@
      * Finalize expansion process
      */
     finalize(totalExpanded) {
+      // Stop keeping tab active
+      this.stopKeepingTabActive();
+
       // Restore original zoom level
       document.body.style.zoom = this.originalZoom || '100%';
 
@@ -461,6 +467,60 @@
       }
 
       log.info(`Expanded ${totalExpanded} campaigns, captured ${count} total`);
+    },
+
+    /**
+     * Keep tab active to prevent Chrome from throttling
+     */
+    keepTabActive() {
+      // Play silent audio to prevent tab throttling
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0; // Silent
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.start();
+        this.audioContext = audioContext;
+        this.oscillator = oscillator;
+      } catch (e) {
+        // Audio context not available, fall back to other methods
+      }
+
+      // Listen for visibility changes and warn user
+      this.visibilityHandler = () => {
+        if (document.hidden) {
+          notification.show('⚠️ Tab lost focus! Click here to continue loading.', true, true);
+        } else {
+          notification.show('Loading drop details...', false, true);
+        }
+      };
+      document.addEventListener('visibilitychange', this.visibilityHandler);
+
+      // Periodic activity to prevent throttling
+      this.keepAliveInterval = setInterval(() => {
+        // Small DOM read to keep the tab "active"
+        void document.body.offsetHeight;
+      }, 1000);
+    },
+
+    /**
+     * Stop keeping tab active
+     */
+    stopKeepingTabActive() {
+      if (this.audioContext) {
+        try {
+          this.oscillator?.stop();
+          this.audioContext.close();
+        } catch (e) { /* ignore */ }
+      }
+      if (this.visibilityHandler) {
+        document.removeEventListener('visibilitychange', this.visibilityHandler);
+      }
+      if (this.keepAliveInterval) {
+        clearInterval(this.keepAliveInterval);
+      }
     },
 
     delay: ms => new Promise(resolve => setTimeout(resolve, ms))
