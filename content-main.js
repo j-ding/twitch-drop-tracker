@@ -463,7 +463,11 @@
       if (count === 0) {
         notification.show('No campaigns found. Make sure you\'re on the Twitch Drops page.', true);
       } else {
-        notification.show(`Done! Loaded ${count} campaigns. You can close this tab.`);
+        notification.show(`Done! Loaded ${count} campaigns. Closing tab in 3 seconds...`);
+        // Auto-close tab after 3 seconds
+        setTimeout(() => {
+          window.close();
+        }, 3000);
       }
 
       log.info(`Expanded ${totalExpanded} campaigns, captured ${count} total`);

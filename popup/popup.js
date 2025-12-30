@@ -17,6 +17,7 @@ const log = {
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initButtons();
+  initSettings();
   loadStoredData();
 });
 
@@ -40,8 +41,116 @@ function initButtons() {
   document.getElementById('open-inventory-btn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://www.twitch.tv/drops/inventory' });
   });
-  document.getElementById('load-all-drops-btn').addEventListener('click', () => {
+  document.getElementById('load-all-drops-btn').addEventListener('click', loadAllDrops);
+}
+
+async function loadAllDrops() {
+  const { backgroundScrapingEnabled } = await chrome.storage.local.get(['backgroundScrapingEnabled']);
+
+  if (backgroundScrapingEnabled) {
+    // Use background scraping mode
+    const loadBtn = document.getElementById('load-all-drops-btn');
+    loadBtn.textContent = '⏳ Loading in background...';
+    loadBtn.disabled = true;
+
+    chrome.runtime.sendMessage({ action: 'backgroundScrape' }, (response) => {
+      if (response?.success) {
+        loadBtn.textContent = '✓ Done!';
+        setTimeout(() => {
+          loadBtn.textContent = '📥 Load All Drop Details';
+          loadBtn.disabled = false;
+          loadStoredData(); // Refresh the UI
+        }, 2000);
+      } else {
+        loadBtn.textContent = '❌ Failed - try normal mode';
+        setTimeout(() => {
+          loadBtn.textContent = '📥 Load All Drop Details';
+          loadBtn.disabled = false;
+        }, 3000);
+      }
+    });
+  } else {
+    // Use normal tab-based scraping
     chrome.tabs.create({ url: 'https://www.twitch.tv/drops/campaigns?loadAllDrops=true' });
+  }
+}
+
+// =============================================================================
+// Settings
+// =============================================================================
+async function initSettings() {
+  const settingsBtn = document.getElementById('settings-btn');
+  const closeSettingsBtn = document.getElementById('close-settings-btn');
+  const settingsPanel = document.getElementById('settings-panel');
+  const backgroundToggle = document.getElementById('background-scraping-toggle');
+
+  // Load saved setting
+  const { backgroundScrapingEnabled } = await chrome.storage.local.get(['backgroundScrapingEnabled']);
+  backgroundToggle.checked = backgroundScrapingEnabled || false;
+
+  // Settings panel toggle
+  settingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('hidden');
+  });
+
+  closeSettingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.add('hidden');
+  });
+
+  // Background scraping toggle with warning
+  backgroundToggle.addEventListener('change', async (e) => {
+    if (e.target.checked) {
+      // Show warning modal
+      const confirmed = await showWarningModal();
+      if (confirmed) {
+        await chrome.storage.local.set({ backgroundScrapingEnabled: true });
+      } else {
+        e.target.checked = false;
+      }
+    } else {
+      await chrome.storage.local.set({ backgroundScrapingEnabled: false });
+    }
+  });
+}
+
+function showWarningModal() {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'warning-modal';
+    modal.innerHTML = `
+      <div class="warning-content">
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-title">Experimental Feature</div>
+        <div class="warning-text">
+          Background scraping runs without opening a visible tab, but may be less reliable for large campaigns with many drops.
+          <br><br>
+          If drops are missing, try disabling this and using the normal mode.
+        </div>
+        <div class="warning-buttons">
+          <button class="warning-btn cancel">Cancel</button>
+          <button class="warning-btn confirm">Enable</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('.cancel').addEventListener('click', () => {
+      modal.remove();
+      resolve(false);
+    });
+
+    modal.querySelector('.confirm').addEventListener('click', () => {
+      modal.remove();
+      resolve(true);
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+        resolve(false);
+      }
+    });
   });
 }
 

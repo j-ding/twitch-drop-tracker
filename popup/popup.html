@@ -71,8 +71,34 @@
       </div>
     </div>
 
+    <!-- Settings Panel (hidden by default) -->
+    <div id="settings-panel" class="settings-panel hidden">
+      <div class="settings-header">
+        <span>⚙️ Settings</span>
+        <button id="close-settings-btn" class="icon-btn small">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="settings-content">
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">Background Scraping</div>
+            <div class="setting-description">Load drops without keeping tab focused (experimental)</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="background-scraping-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
     <!-- Footer -->
     <footer class="footer">
+      <button id="settings-btn" class="settings-footer-btn" title="Settings">⚙️</button>
       <span id="last-updated">Never updated</span>
     </footer>
   </div>

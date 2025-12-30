@@ -501,6 +501,157 @@ async function fetchAllData() {
 }
 
 // =============================================================================
+// Background Scraping
+// =============================================================================
+const backgroundScraper = {
+  async scrapeAllCampaigns() {
+    const authToken = await twitchAPI.getAuthToken();
+    if (!authToken) {
+      throw new Error('Not logged into Twitch');
+    }
+
+    // First, get the list of all campaigns
+    const campaignsList = await this.fetchCampaignsList(authToken);
+    if (!campaignsList?.length) {
+      throw new Error('No campaigns found');
+    }
+
+    log.info(`Found ${campaignsList.length} campaigns, fetching details...`);
+
+    // Fetch details for each campaign (with rate limiting)
+    const detailedCampaigns = [];
+    for (const campaign of campaignsList) {
+      try {
+        const details = await this.fetchCampaignDetails(authToken, campaign.id);
+        if (details) {
+          detailedCampaigns.push({
+            ...campaign,
+            timeBasedDrops: details.timeBasedDrops || []
+          });
+        } else {
+          detailedCampaigns.push(campaign);
+        }
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 100));
+      } catch (e) {
+        log.error(`Failed to fetch details for campaign ${campaign.id}:`, e.message);
+        detailedCampaigns.push(campaign);
+      }
+    }
+
+    // Transform and merge with inventory
+    const transformed = this.transformCampaigns(detailedCampaigns);
+    const { inventory } = await storage.get(['inventory']);
+    const inv = inventory || { inProgress: [], claimable: [], claimed: [], gameEventDrops: [] };
+    const { completedCampaigns, completedGames } = await storage.getCompletionData();
+    const merged = campaignMerger.merge(transformed, inv, completedCampaigns, completedGames);
+
+    await storage.set({
+      campaigns: merged,
+      lastUpdated: new Date().toISOString()
+    });
+
+    log.info(`Background scrape complete: ${merged.length} campaigns`);
+    return merged;
+  },
+
+  async fetchCampaignsList(authToken) {
+    const query = `
+      query DropCampaignsList {
+        currentUser {
+          dropCampaigns(status: ACTIVE) {
+            id
+            name
+            status
+            startAt
+            endAt
+            detailsURL
+            accountLinkURL
+            owner { id name }
+            game { id displayName boxArtURL }
+            self { isAccountConnected }
+            timeBasedDrops {
+              id
+              name
+              startAt
+              endAt
+              requiredMinutesWatched
+              benefitEdges { benefit { id name imageAssetURL } }
+            }
+          }
+        }
+      }
+    `;
+
+    const data = await twitchAPI.graphqlRequest(authToken, query);
+    return data.data?.currentUser?.dropCampaigns || [];
+  },
+
+  async fetchCampaignDetails(authToken, campaignId) {
+    const query = `
+      query DropCampaignDetails($id: ID!) {
+        dropCampaign(id: $id) {
+          id
+          name
+          timeBasedDrops {
+            id
+            name
+            startAt
+            endAt
+            requiredMinutesWatched
+            self {
+              currentMinutesWatched
+              dropInstanceID
+              isClaimed
+              hasPreconditionsMet
+            }
+            benefitEdges {
+              benefit {
+                id
+                name
+                imageAssetURL
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const data = await twitchAPI.graphqlRequest(authToken, query, { id: campaignId });
+    return data.data?.dropCampaign;
+  },
+
+  transformCampaigns(rawCampaigns) {
+    return rawCampaigns
+      .filter(c => c.status === 'ACTIVE')
+      .map(c => ({
+        id: c.id,
+        game: c.game?.displayName || c.name,
+        publisher: c.owner?.name || '',
+        imageUrl: twitchAPI.formatBoxArtUrl(c.game?.boxArtURL),
+        startDate: c.startAt,
+        endDate: c.endAt,
+        detailsURL: c.detailsURL,
+        accountLinkURL: c.accountLinkURL,
+        isConnected: c.self?.isAccountConnected || false,
+        drops: (c.timeBasedDrops || []).map(d => ({
+          id: d.id,
+          name: d.benefitEdges?.[0]?.benefit?.name || d.name,
+          imageUrl: d.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
+          requiredMinutes: d.requiredMinutesWatched,
+          startAt: d.startAt,
+          endAt: d.endAt,
+          progressMinutes: d.self?.currentMinutesWatched || 0,
+          status: d.self?.isClaimed ? 'claimed' :
+                  (d.self?.currentMinutesWatched >= d.requiredMinutesWatched) ? 'claimable' :
+                  (d.self?.currentMinutesWatched > 0 || d.self?.hasPreconditionsMet) ? 'in_progress' :
+                  'locked'
+        }))
+      }));
+  }
+};
+
+// =============================================================================
 // Message Handlers
 // =============================================================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -509,6 +660,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fetchAllData()
         .then(data => sendResponse({ success: true, ...data }))
         .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'backgroundScrape':
+      backgroundScraper.scrapeAllCampaigns()
+        .then(campaigns => sendResponse({ success: true, count: campaigns.length }))
+        .catch(error => {
+          log.error('Background scrape failed:', error.message);
+          sendResponse({ success: false, error: error.message });
+        });
       return true;
 
     case 'campaignsIntercepted':
