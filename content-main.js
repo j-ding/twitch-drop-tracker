@@ -383,9 +383,9 @@
       // Try to keep the tab active by requesting visibility
       this.keepTabActive();
 
-      // Save original zoom and zoom out to 50% to see more campaigns
+      // Save original zoom and zoom out to 25% to see more campaigns
       this.originalZoom = document.body.style.zoom || '100%';
-      document.body.style.zoom = '50%';
+      document.body.style.zoom = '25%';
 
       await this.delay(CONFIG.PAGE_LOAD_DELAY);
 
