@@ -31,8 +31,17 @@ icons/generate-icons.html
 
 # Archives
 *.zip
+*.rar
 *.crx
 *.pem
+
+# Promo/Store images
+image*.png
+twitch_drops_tracker_*.png
+showcase/
+
+# Temp icon files
+icons/twitch_icon_*.png
 
 # Local development
 .env
