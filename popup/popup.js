@@ -270,10 +270,12 @@ function renderCampaignCard(campaign, urgency) {
     ? drops.map(renderDropItem).join('')
     : '<div style="text-align: center; padding: 12px 0; color: var(--text-muted); font-size: 11px;">Drop details not loaded yet.<br>Use "Load All Drop Details" below.</div>';
 
+  const gameSlug = gameNameToSlug(campaign.game);
+
   return `
     <div class="campaign-card ${urgencyClass} ${isCompleted ? 'completed' : ''}" data-id="${campaign.id || ''}">
       <div class="campaign-header">
-        <img class="campaign-image" src="${campaign.imageUrl || ''}" alt="" onerror="this.style.display='none'">
+        <img class="campaign-image clickable" src="${campaign.imageUrl || ''}" alt="" onerror="this.style.display='none'" data-game-slug="${gameSlug}" title="Open ${escapeHtml(campaign.game)} drops on Twitch">
         <div class="campaign-info">
           <div class="campaign-name">${escapeHtml(campaign.game)} ${statusBadge}</div>
           <div class="campaign-publisher">${escapeHtml(campaign.publisher || '')}</div>
@@ -406,10 +408,14 @@ function renderProgressCampaignCard(campaign) {
   const hasLockedDrops = drops.some(d => d.status === 'locked');
   const likelyIncomplete = drops.length <= inProgressCount + claimedCount && !hasLockedDrops && drops.length < 3;
 
-  // Calculate overall progress across all drops
-  const totalProgress = drops.reduce((sum, d) => sum + (d.progressMinutes || 0), 0);
+  // Calculate overall progress across all drops (cap each drop at 100%)
+  const totalProgress = drops.reduce((sum, d) => {
+    const progress = d.progressMinutes || 0;
+    const required = d.requiredMinutes || 60;
+    return sum + Math.min(progress, required); // Cap at required
+  }, 0);
   const totalRequired = drops.reduce((sum, d) => sum + (d.requiredMinutes || 60), 0);
-  const overallPercent = Math.round((totalProgress / totalRequired) * 100);
+  const overallPercent = Math.min(100, Math.round((totalProgress / totalRequired) * 100));
 
   // Render all drops with their respective statuses
   const dropsHtml = drops.map(drop => {
@@ -447,15 +453,17 @@ function renderProgressCampaignCard(campaign) {
     ? '<div style="text-align: center; padding: 8px; color: var(--text-muted); font-size: 10px; border-top: 1px solid var(--border);">Other drops may exist. Use "Load All Drop Details" for full info.</div>'
     : '';
 
+  const gameSlug = gameNameToSlug(campaign.game);
+
   return `
     <div class="campaign-card ${urgencyClass}">
       <div class="campaign-header">
-        <img class="campaign-image" src="${campaign.imageUrl || ''}" alt="" onerror="this.style.display='none'">
+        <img class="campaign-image clickable" src="${campaign.imageUrl || ''}" alt="" onerror="this.style.display='none'" data-game-slug="${gameSlug}" title="Open ${escapeHtml(campaign.game)} drops on Twitch">
         <div class="campaign-info">
           <div class="campaign-name">${escapeHtml(campaign.game)} <span class="campaign-status in-progress">${claimedCount}/${drops.length}${likelyIncomplete ? '+' : ''}</span></div>
           <div class="campaign-expiry">Ends: ${formatExpiry(endDate)}</div>
           <div class="progress-container" style="margin-top: 4px;">
-            <div class="progress-bar"><div class="progress-fill" style="width: ${overallPercent}%"></div></div>
+            <div class="progress-bar"><div class="progress-fill ${overallPercent >= 100 ? 'complete' : ''}" style="width: ${Math.min(100, overallPercent)}%"></div></div>
             <span class="progress-text">${overallPercent}%</span>
           </div>
         </div>
@@ -488,8 +496,39 @@ function renderProgressCard(drop, type) {
 // =============================================================================
 function attachCardListeners(container) {
   container.querySelectorAll('.campaign-header').forEach(header => {
-    header.addEventListener('click', () => header.closest('.campaign-card').classList.toggle('expanded'));
+    header.addEventListener('click', (e) => {
+      // Don't toggle if clicking on the game image
+      if (e.target.classList.contains('campaign-image')) return;
+      header.closest('.campaign-card').classList.toggle('expanded');
+    });
   });
+
+  // Add click listeners for game images
+  container.querySelectorAll('.campaign-image.clickable').forEach(img => {
+    img.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const slug = img.dataset.gameSlug;
+      if (slug) {
+        chrome.tabs.create({ url: `https://www.twitch.tv/directory/category/${slug}?filter=drops` });
+      }
+    });
+  });
+}
+
+/**
+ * Convert game name to Twitch directory slug
+ * e.g., "Vampire: The Masquerade - Bloodhunt" -> "vampire-the-masquerade-bloodhunt"
+ */
+function gameNameToSlug(gameName) {
+  if (!gameName) return '';
+  return gameName
+    .toLowerCase()
+    .replace(/[:']/g, '')           // Remove colons and apostrophes
+    .replace(/&/g, 'and')           // Replace & with 'and'
+    .replace(/[^a-z0-9\s-]/g, '')   // Remove special characters except spaces and hyphens
+    .replace(/\s+/g, '-')           // Replace spaces with hyphens
+    .replace(/-+/g, '-')            // Replace multiple hyphens with single
+    .replace(/^-|-$/g, '');         // Remove leading/trailing hyphens
 }
 
 window.toggleClaimed = () => document.getElementById('claimed-section')?.classList.toggle('expanded');

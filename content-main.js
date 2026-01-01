@@ -11,9 +11,9 @@
   const CONFIG = {
     GRAPHQL_URL: 'gql.twitch.tv',
     NOTIFICATION_ID: 'twitch-drops-notification',
-    PAGE_LOAD_DELAY: 2000,
-    EXPAND_CLICK_DELAY: 200,
-    SCROLL_DELAY: 400,
+    PAGE_LOAD_DELAY: 500,
+    EXPAND_CLICK_DELAY: 150,
+    SCROLL_DELAY: 70,
     SCROLL_AMOUNT: 800,
     MAX_ITERATIONS: 100,
     HEADER_HEIGHT: 60,
@@ -343,14 +343,19 @@
     isValidButton(btn) {
       if (!btn.offsetParent) return false;
 
+      // Get zoom level for coordinate adjustment
+      const zoom = parseFloat(document.body.style.zoom) / 100 || 1;
+
       const rect = btn.getBoundingClientRect();
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      const absoluteTop = rect.top + scrollTop;
+      // Adjust coordinates for zoom level
+      const adjustedLeft = rect.left / zoom;
+      const adjustedTop = rect.top / zoom;
+      const adjustedWindowWidth = window.innerWidth / zoom;
 
       // Skip header, sidebar, and profile area buttons
-      if (absoluteTop < CONFIG.HEADER_HEIGHT) return false;
-      if (rect.left < CONFIG.SIDEBAR_WIDTH) return false;
-      if (rect.left > window.innerWidth - CONFIG.SIDEBAR_WIDTH) return false;
+      if (adjustedTop < CONFIG.HEADER_HEIGHT) return false;
+      if (adjustedLeft < CONFIG.SIDEBAR_WIDTH) return false;
+      if (adjustedLeft > adjustedWindowWidth - CONFIG.SIDEBAR_WIDTH) return false;
 
       // Must have SVG chevron icon
       return !!btn.querySelector('svg');
@@ -389,12 +394,24 @@
 
       await this.delay(CONFIG.PAGE_LOAD_DELAY);
 
+      // Wait for page content to load
+      let retries = 0;
+      while (retries < 10) {
+        const testButtons = document.querySelectorAll('button[aria-expanded]');
+        if (testButtons.length > 0) break;
+        log.info(`Waiting for page to load... (attempt ${retries + 1})`);
+        await this.delay(1000);
+        retries++;
+      }
+
       let totalExpanded = 0;
       const clickedButtons = new Set();
 
       for (let i = 0; i < CONFIG.MAX_ITERATIONS; i++) {
         const allButtons = document.querySelectorAll('button[aria-expanded="false"]');
         const validButtons = Array.from(allButtons).filter(b => this.isValidButton(b));
+
+        log.info(`Iteration ${i}: Found ${allButtons.length} collapsed buttons, ${validButtons.length} valid`);
 
         let expandedThisRound = 0;
         let hitExpired = false;
@@ -460,8 +477,12 @@
       window.scrollTo(0, 0);
 
       const count = Math.max(state.campaigns.length, Object.keys(state.details).length);
-      if (count === 0) {
-        notification.show('No campaigns found. Make sure you\'re on the Twitch Drops page.', true);
+      log.info(`Finalize: expanded=${totalExpanded}, campaigns=${state.campaigns.length}, details=${Object.keys(state.details).length}`);
+
+      if (count === 0 && totalExpanded === 0) {
+        notification.show('No campaigns found. Page may not have loaded properly. Try again.', true);
+      } else if (count === 0) {
+        notification.show(`Clicked ${totalExpanded} buttons but no data captured. Try refreshing.`, true);
       } else {
         notification.show(`Done! Loaded ${count} campaigns. Closing tab in 3 seconds...`);
         // Auto-close tab after 3 seconds

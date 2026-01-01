@@ -224,6 +224,16 @@ body {
   background-color: var(--bg-tertiary);
 }
 
+.campaign-image.clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.campaign-image.clickable:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 8px var(--accent-purple);
+}
+
 .campaign-info {
   flex: 1;
   min-width: 0;
