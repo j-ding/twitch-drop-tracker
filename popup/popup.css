@@ -12,6 +12,8 @@
   --success: #00c853;
   --warning: #ffab00;
   --danger: #f44336;
+  --orange: #ff7043;
+  --blue-light: #42a5f5;
   --border: #303032;
   --progress-bg: #3a3a3d;
 }
@@ -169,12 +171,20 @@ body {
   color: var(--text-muted);
 }
 
-.section-header.expiring {
+.section-header.danger {
+  color: var(--danger);
+}
+
+.section-header.orange {
+  color: var(--orange);
+}
+
+.section-header.warning {
   color: var(--warning);
 }
 
-.section-header.danger {
-  color: var(--danger);
+.section-header.soon {
+  color: var(--blue-light);
 }
 
 /* Campaign Card */
@@ -191,12 +201,20 @@ body {
   border-color: var(--accent-purple);
 }
 
+.campaign-card.expiring-today {
+  border-left: 3px solid var(--danger);
+}
+
+.campaign-card.expiring-tomorrow {
+  border-left: 3px solid var(--orange);
+}
+
 .campaign-card.expiring-soon {
   border-left: 3px solid var(--warning);
 }
 
-.campaign-card.expiring-today {
-  border-left: 3px solid var(--danger);
+.campaign-card.expiring-week {
+  border-left: 3px solid var(--blue-light);
 }
 
 .campaign-card.completed {
@@ -261,12 +279,20 @@ body {
   margin-top: 2px;
 }
 
+.campaign-expiry.today {
+  color: var(--danger);
+}
+
+.campaign-expiry.tomorrow {
+  color: var(--orange);
+}
+
 .campaign-expiry.soon {
   color: var(--warning);
 }
 
-.campaign-expiry.today {
-  color: var(--danger);
+.campaign-expiry.week {
+  color: var(--blue-light);
 }
 
 .expand-icon {

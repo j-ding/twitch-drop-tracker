@@ -12,12 +12,15 @@
     GRAPHQL_URL: 'gql.twitch.tv',
     NOTIFICATION_ID: 'twitch-drops-notification',
     PAGE_LOAD_DELAY: 500,
-    EXPAND_CLICK_DELAY: 150,
+    EXPAND_CLICK_DELAY: 30,
     SCROLL_DELAY: 70,
     SCROLL_AMOUNT: 800,
     MAX_ITERATIONS: 100,
     HEADER_HEIGHT: 60,
-    SIDEBAR_WIDTH: 80
+    SIDEBAR_WIDTH: 80,
+    // API response tracking
+    API_RESPONSE_TIMEOUT: 800,   // Max wait for API response (reduced from 3000)
+    API_SETTLE_TIME: 80          // Wait after last response before moving on (reduced from 150)
   };
 
   // ==========================================================================
@@ -37,7 +40,10 @@
     get details() { return window.__twitchDropDetails || {}; },
     set details(val) { window.__twitchDropDetails = val; },
     get claimedDrops() { return window.__twitchClaimedDrops || []; },
-    set claimedDrops(val) { window.__twitchClaimedDrops = val; }
+    set claimedDrops(val) { window.__twitchClaimedDrops = val; },
+    // Track last API response time for smart waiting
+    lastApiResponse: 0,
+    pendingRequests: 0
   };
 
   // Initialize state
@@ -259,13 +265,24 @@
   const originalFetch = window.fetch;
 
   window.fetch = async function(...args) {
+    const url = args[0]?.url || args[0];
+    const isGraphQL = typeof url === 'string' && url.includes(CONFIG.GRAPHQL_URL);
+
+    // Track pending GraphQL requests
+    if (isGraphQL) {
+      state.pendingRequests++;
+    }
+
     const response = await originalFetch.apply(this, args);
 
     try {
-      const url = args[0]?.url || args[0];
-      if (typeof url === 'string' && url.includes(CONFIG.GRAPHQL_URL)) {
+      if (isGraphQL) {
         const clone = response.clone();
         clone.json().then(data => {
+          // Mark response received
+          state.lastApiResponse = Date.now();
+          state.pendingRequests = Math.max(0, state.pendingRequests - 1);
+
           // Extract campaigns list
           const campaigns = extractors.campaignsList(data);
           if (campaigns) {
@@ -293,10 +310,14 @@
               dispatchClaimedDrops();
             }
           }
-        }).catch(() => {});
+        }).catch(() => {
+          state.pendingRequests = Math.max(0, state.pendingRequests - 1);
+        });
       }
     } catch (e) {
-      // Silently ignore errors
+      if (isGraphQL) {
+        state.pendingRequests = Math.max(0, state.pendingRequests - 1);
+      }
     }
 
     return response;
@@ -422,13 +443,14 @@
 
           // Scroll into view and click
           btn.scrollIntoView({ behavior: 'instant', block: 'center' });
-          await this.delay(100);
+          await this.delay(CONFIG.EXPAND_CLICK_DELAY);
           btn.click();
           clickedButtons.add(btnId);
           totalExpanded++;
           expandedThisRound++;
 
-          await this.delay(CONFIG.EXPAND_CLICK_DELAY);
+          // Wait for API responses to settle (smart wait for large campaigns)
+          await this.waitForApiResponse();
 
           // Check for expired campaign
           const lastDetailId = Object.keys(state.details).pop();
@@ -548,7 +570,35 @@
       }
     },
 
-    delay: ms => new Promise(resolve => setTimeout(resolve, ms))
+    delay: ms => new Promise(resolve => setTimeout(resolve, ms)),
+
+    /**
+     * Wait for API responses to settle after clicking expand
+     * This ensures we capture all drops from large campaigns
+     */
+    async waitForApiResponse() {
+      const startTime = Date.now();
+
+      // Quick initial wait for request to start
+      await this.delay(30);
+
+      // If no pending requests and no recent response, exit quickly
+      if (state.pendingRequests === 0 && Date.now() - state.lastApiResponse > CONFIG.API_SETTLE_TIME) {
+        return;
+      }
+
+      // Wait for pending requests to complete
+      while (Date.now() - startTime < CONFIG.API_RESPONSE_TIMEOUT) {
+        if (state.pendingRequests === 0) {
+          // No pending requests - wait a short settle time then exit
+          const timeSinceLastResponse = Date.now() - state.lastApiResponse;
+          if (timeSinceLastResponse >= CONFIG.API_SETTLE_TIME) {
+            break;
+          }
+        }
+        await this.delay(30);
+      }
+    }
   };
 
   // ==========================================================================

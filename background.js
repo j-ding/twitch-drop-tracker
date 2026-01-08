@@ -510,37 +510,26 @@ const backgroundScraper = {
       throw new Error('Not logged into Twitch');
     }
 
-    // First, get the list of all campaigns
-    const campaignsList = await this.fetchCampaignsList(authToken);
+    log.info('Starting background scrape...');
+
+    // Single API call gets all campaigns with full drop details and progress
+    let campaignsList;
+    try {
+      campaignsList = await this.fetchCampaignsList(authToken);
+    } catch (e) {
+      log.error('Failed to fetch campaigns list:', e.message);
+      throw new Error(`Failed to fetch campaigns: ${e.message}`);
+    }
+
     if (!campaignsList?.length) {
-      throw new Error('No campaigns found');
+      log.info('No active campaigns found');
+      throw new Error('No active campaigns found');
     }
 
-    log.info(`Found ${campaignsList.length} campaigns, fetching details...`);
+    log.info(`Fetched ${campaignsList.length} campaigns with drop details`);
 
-    // Fetch details for each campaign (with rate limiting)
-    const detailedCampaigns = [];
-    for (const campaign of campaignsList) {
-      try {
-        const details = await this.fetchCampaignDetails(authToken, campaign.id);
-        if (details) {
-          detailedCampaigns.push({
-            ...campaign,
-            timeBasedDrops: details.timeBasedDrops || []
-          });
-        } else {
-          detailedCampaigns.push(campaign);
-        }
-        // Small delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 100));
-      } catch (e) {
-        log.error(`Failed to fetch details for campaign ${campaign.id}:`, e.message);
-        detailedCampaigns.push(campaign);
-      }
-    }
-
-    // Transform and merge with inventory
-    const transformed = this.transformCampaigns(detailedCampaigns);
+    // Transform and merge with inventory (no need for individual detail fetches)
+    const transformed = this.transformCampaigns(campaignsList);
     const { inventory } = await storage.get(['inventory']);
     const inv = inventory || { inProgress: [], claimable: [], claimed: [], gameEventDrops: [] };
     const { completedCampaigns, completedGames } = await storage.getCompletionData();
@@ -556,10 +545,11 @@ const backgroundScraper = {
   },
 
   async fetchCampaignsList(authToken) {
+    // Query through currentUser to get all active drop campaigns with progress
     const query = `
-      query DropCampaignsList {
+      query ViewerDropsDashboard {
         currentUser {
-          dropCampaigns(status: ACTIVE) {
+          dropCampaigns {
             id
             name
             status
@@ -576,6 +566,12 @@ const backgroundScraper = {
               startAt
               endAt
               requiredMinutesWatched
+              self {
+                currentMinutesWatched
+                dropInstanceID
+                isClaimed
+                hasPreconditionsMet
+              }
               benefitEdges { benefit { id name imageAssetURL } }
             }
           }
@@ -584,7 +580,9 @@ const backgroundScraper = {
     `;
 
     const data = await twitchAPI.graphqlRequest(authToken, query);
-    return data.data?.currentUser?.dropCampaigns || [];
+    const campaigns = data.data?.currentUser?.dropCampaigns || [];
+    // Filter to only active campaigns
+    return campaigns.filter(c => c.status === 'ACTIVE');
   },
 
   async fetchCampaignDetails(authToken, campaignId) {
@@ -673,22 +671,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case 'campaignsIntercepted':
       if (request.campaigns?.length > 0) {
-        storage.getCompletionData().then(async ({ completedCampaigns, completedGames }) => {
+        (async () => {
+          const { completedCampaigns, completedGames } = await storage.getCompletionData();
           const { inventory } = await storage.get(['inventory']);
           const inv = inventory || { inProgress: [], claimable: [], claimed: [], gameEventDrops: [] };
           const merged = campaignMerger.merge(request.campaigns, inv, completedCampaigns, completedGames);
           await storage.set({ campaigns: merged, lastUpdated: new Date().toISOString() });
-        });
+          sendResponse({ success: true });
+        })();
+      } else {
+        sendResponse({ success: true });
       }
-      sendResponse({ success: true });
-      return false;
+      return true;
 
     case 'claimedDropsIntercepted':
       if (request.claimedDrops?.length > 0) {
-        claimedDropsHandler.process(request.claimedDrops);
+        claimedDropsHandler.process(request.claimedDrops)
+          .then(() => sendResponse({ success: true }))
+          .catch(() => sendResponse({ success: true }));
+      } else {
+        sendResponse({ success: true });
       }
-      sendResponse({ success: true });
-      return false;
+      return true;
 
     default:
       return false;

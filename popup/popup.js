@@ -44,49 +44,18 @@ function initButtons() {
   document.getElementById('load-all-drops-btn').addEventListener('click', loadAllDrops);
 }
 
-async function loadAllDrops() {
-  const { backgroundScrapingEnabled } = await chrome.storage.local.get(['backgroundScrapingEnabled']);
-
-  if (backgroundScrapingEnabled) {
-    // Use background scraping mode
-    const loadBtn = document.getElementById('load-all-drops-btn');
-    loadBtn.textContent = '⏳ Loading in background...';
-    loadBtn.disabled = true;
-
-    chrome.runtime.sendMessage({ action: 'backgroundScrape' }, (response) => {
-      if (response?.success) {
-        loadBtn.textContent = '✓ Done!';
-        setTimeout(() => {
-          loadBtn.textContent = '📥 Load All Drop Details';
-          loadBtn.disabled = false;
-          loadStoredData(); // Refresh the UI
-        }, 2000);
-      } else {
-        loadBtn.textContent = '❌ Failed - try normal mode';
-        setTimeout(() => {
-          loadBtn.textContent = '📥 Load All Drop Details';
-          loadBtn.disabled = false;
-        }, 3000);
-      }
-    });
-  } else {
-    // Use normal tab-based scraping
-    chrome.tabs.create({ url: 'https://www.twitch.tv/drops/campaigns?loadAllDrops=true' });
-  }
+function loadAllDrops() {
+  // Tab-based scraping - Twitch blocks direct API calls with integrity checks
+  chrome.tabs.create({ url: 'https://www.twitch.tv/drops/campaigns?loadAllDrops=true' });
 }
 
 // =============================================================================
 // Settings
 // =============================================================================
-async function initSettings() {
+function initSettings() {
   const settingsBtn = document.getElementById('settings-btn');
   const closeSettingsBtn = document.getElementById('close-settings-btn');
   const settingsPanel = document.getElementById('settings-panel');
-  const backgroundToggle = document.getElementById('background-scraping-toggle');
-
-  // Load saved setting
-  const { backgroundScrapingEnabled } = await chrome.storage.local.get(['backgroundScrapingEnabled']);
-  backgroundToggle.checked = backgroundScrapingEnabled || false;
 
   // Settings panel toggle
   settingsBtn.addEventListener('click', () => {
@@ -95,62 +64,6 @@ async function initSettings() {
 
   closeSettingsBtn.addEventListener('click', () => {
     settingsPanel.classList.add('hidden');
-  });
-
-  // Background scraping toggle with warning
-  backgroundToggle.addEventListener('change', async (e) => {
-    if (e.target.checked) {
-      // Show warning modal
-      const confirmed = await showWarningModal();
-      if (confirmed) {
-        await chrome.storage.local.set({ backgroundScrapingEnabled: true });
-      } else {
-        e.target.checked = false;
-      }
-    } else {
-      await chrome.storage.local.set({ backgroundScrapingEnabled: false });
-    }
-  });
-}
-
-function showWarningModal() {
-  return new Promise((resolve) => {
-    const modal = document.createElement('div');
-    modal.className = 'warning-modal';
-    modal.innerHTML = `
-      <div class="warning-content">
-        <div class="warning-icon">⚠️</div>
-        <div class="warning-title">Experimental Feature</div>
-        <div class="warning-text">
-          Background scraping runs without opening a visible tab, but may be less reliable for large campaigns with many drops.
-          <br><br>
-          If drops are missing, try disabling this and using the normal mode.
-        </div>
-        <div class="warning-buttons">
-          <button class="warning-btn cancel">Cancel</button>
-          <button class="warning-btn confirm">Enable</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    modal.querySelector('.cancel').addEventListener('click', () => {
-      modal.remove();
-      resolve(false);
-    });
-
-    modal.querySelector('.confirm').addEventListener('click', () => {
-      modal.remove();
-      resolve(true);
-    });
-
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.remove();
-        resolve(false);
-      }
-    });
   });
 }
 
@@ -225,13 +138,19 @@ function renderCampaigns(campaigns) {
   }
 
   const sorted = [...campaigns].sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
-  const now = new Date();
-  const todayEnd = new Date(now.setHours(23, 59, 59, 999));
-  const weekEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  // Use calendar day boundaries (end of each day at 23:59:59)
+  const today = new Date();
+  const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+  const tomorrowEnd = new Date(todayEnd.getTime() + 24 * 60 * 60 * 1000);
+  const threeDaysEnd = new Date(todayEnd.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const weekEnd = new Date(todayEnd.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const groups = {
     today: sorted.filter(c => new Date(c.endDate) <= todayEnd),
-    week: sorted.filter(c => { const d = new Date(c.endDate); return d > todayEnd && d <= weekEnd; }),
+    tomorrow: sorted.filter(c => { const d = new Date(c.endDate); return d > todayEnd && d <= tomorrowEnd; }),
+    soon: sorted.filter(c => { const d = new Date(c.endDate); return d > tomorrowEnd && d <= threeDaysEnd; }),
+    week: sorted.filter(c => { const d = new Date(c.endDate); return d > threeDaysEnd && d <= weekEnd; }),
     later: sorted.filter(c => new Date(c.endDate) > weekEnd)
   };
 
@@ -240,8 +159,16 @@ function renderCampaigns(campaigns) {
     html += '<div class="section-header danger">⚠️ Expiring Today</div>';
     html += groups.today.map(c => renderCampaignCard(c, 'today')).join('');
   }
+  if (groups.tomorrow.length) {
+    html += '<div class="section-header orange">🔶 Tomorrow</div>';
+    html += groups.tomorrow.map(c => renderCampaignCard(c, 'tomorrow')).join('');
+  }
+  if (groups.soon.length) {
+    html += '<div class="section-header warning">📅 2-3 Days</div>';
+    html += groups.soon.map(c => renderCampaignCard(c, 'soon')).join('');
+  }
   if (groups.week.length) {
-    html += '<div class="section-header expiring">📅 This Week</div>';
+    html += '<div class="section-header soon">📆 This Week</div>';
     html += groups.week.map(c => renderCampaignCard(c, 'week')).join('');
   }
   if (groups.later.length) {
@@ -259,8 +186,14 @@ function renderCampaignCard(campaign, urgency) {
   const hasProgress = drops.some(d => ['claimed', 'in_progress', 'claimable'].includes(d.status));
   const isCompleted = campaign.isCompleted || (claimedCount === drops.length && drops.length > 0);
 
-  const urgencyClass = urgency === 'today' ? 'expiring-today' : urgency === 'week' ? 'expiring-soon' : '';
-  const expiryClass = urgency === 'today' ? 'today' : urgency === 'week' ? 'soon' : '';
+  const urgencyClassMap = {
+    today: 'expiring-today',
+    tomorrow: 'expiring-tomorrow',
+    soon: 'expiring-soon',
+    week: 'expiring-week'
+  };
+  const urgencyClass = urgencyClassMap[urgency] || '';
+  const expiryClass = urgency !== 'later' ? urgency : '';
 
   const statusBadge = isCompleted
     ? '<span class="campaign-status claimed">✓ Complete</span>'
