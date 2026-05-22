@@ -24,6 +24,41 @@
   };
 
   // ==========================================================================
+  // Localization (notification messages only)
+  // ==========================================================================
+  const LOCALE_FALLBACK = {
+    notif_keep_focused: '⚠️ Keep this tab focused! Loading drops...',
+    notif_games_selected: '({count} games selected)',
+    notif_tab_lost: '⚠️ Tab lost focus! Click here to continue loading.',
+    notif_loading_details: 'Loading drop details...',
+    notif_loading_count: 'Loading... {count} campaigns',
+    notif_loading_skip: ', {skipped} skipped',
+    notif_no_campaigns: 'No campaigns found. Page may not have loaded properly. Try again.',
+    notif_all_skipped: 'Skipped {count} filtered games. No selected games had drop details to load.',
+    notif_no_details: 'Found {count} campaigns but no drop details captured. Try again.',
+    notif_done: 'Done! Loaded {drops} drops from {campaigns} campaigns{skip}. Closing in 3s...',
+    notif_done_skip: ' ({filtered} filtered)',
+    bubble_keep_focused: 'Keep This Tab Focused!',
+    bubble_keep_focused_sub: 'Switching away may interrupt the drop scan.',
+  };
+
+  function tNotif(key, vars = {}) {
+    let raw;
+    try {
+      const attr = document.documentElement.getAttribute('data-twitch-drops-locale');
+      const strings = attr ? JSON.parse(attr) : {};
+      raw = strings[key] || LOCALE_FALLBACK[key] || key;
+    } catch {
+      raw = LOCALE_FALLBACK[key] || key;
+    }
+    let s = raw;
+    for (const [k, v] of Object.entries(vars)) {
+      s = s.split(`{${k}}`).join(String(v));
+    }
+    return s;
+  }
+
+  // ==========================================================================
   // Logger (production: minimal logging)
   // ==========================================================================
   const log = {
@@ -332,15 +367,17 @@
       const div = document.createElement('div');
       div.id = CONFIG.NOTIFICATION_ID;
       div.style.cssText = `
-        position: fixed; top: 20px; right: 20px;
-        padding: 16px 24px; background: ${isError ? '#f44336' : '#9147ff'};
-        color: white; border-radius: 8px; font-size: 14px;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        z-index: 999999; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        max-width: 300px;
+        position: fixed !important; top: 20px !important; right: 20px !important;
+        padding: 16px 24px !important; background: ${isError ? '#c62828' : '#7b2ff7'} !important;
+        color: #fff !important; border-radius: 12px !important; font-size: 18px !important;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        z-index: 2147483646 !important; box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+        max-width: 480px !important; line-height: 1.4 !important;
+        border-left: 4px solid ${isError ? '#ff5252' : '#b266ff'} !important;
       `;
       div.textContent = message;
-      document.body.appendChild(div);
+      // Append to <html> so body zoom doesn't shrink it
+      document.documentElement.appendChild(div);
       if (!persistent) setTimeout(() => this.remove(), 5000);
     },
 
@@ -353,6 +390,171 @@
       document.getElementById(CONFIG.NOTIFICATION_ID)?.remove();
     }
   };
+
+  // ==========================================================================
+  // Speech Bubble
+  // ==========================================================================
+  const BUBBLE_ID = 'tdt-speech-bubble';
+  const BUBBLE_STYLE_ID = 'tdt-speech-bubble-style';
+
+  function showSpeechBubble() {
+    document.getElementById(BUBBLE_ID)?.remove();
+    document.getElementById(BUBBLE_STYLE_ID)?.remove();
+
+    const title = tNotif('bubble_keep_focused');
+    const sub = tNotif('bubble_keep_focused_sub');
+
+    // Inject keyframes into <head> (unaffected by body zoom)
+    const style = document.createElement('style');
+    style.id = BUBBLE_STYLE_ID;
+    style.textContent = `
+      @keyframes _tdt_pop_in {
+        0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+        65%  { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      }
+      @keyframes _tdt_fade_out {
+        from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        to   { transform: translate(-50%, -50%) scale(0.88); opacity: 0; }
+      }
+      @keyframes _tdt_pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(145,71,255,0.5), 0 24px 64px rgba(0,0,0,0.7); }
+        50%       { box-shadow: 0 0 0 18px rgba(145,71,255,0), 0 24px 64px rgba(0,0,0,0.7); }
+      }
+      @keyframes _tdt_icon_bounce {
+        0%, 100% { transform: translateY(0); }
+        40%       { transform: translateY(-10px); }
+        60%       { transform: translateY(-5px); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Append to <html>, NOT <body> — body.style.zoom won't scale this element
+    const bubble = document.createElement('div');
+    bubble.id = BUBBLE_ID;
+    bubble.style.cssText = `
+      position: fixed !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) scale(0.5);
+      z-index: 2147483647 !important;
+      pointer-events: none !important;
+      animation: _tdt_pop_in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+    `;
+
+    bubble.innerHTML = `
+      <div style="
+        background: #18181b;
+        border: 3px solid #9147ff;
+        border-radius: 28px;
+        padding: 44px 52px 40px;
+        width: 520px;
+        text-align: center;
+        box-shadow: 0 0 0 0 rgba(145,71,255,0.5), 0 24px 64px rgba(0,0,0,0.7);
+        animation: _tdt_pulse 2.2s ease-in-out 0.5s infinite;
+        position: relative;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      ">
+        <!-- tail pointing toward top-right notification bar -->
+        <div style="
+          position: absolute; top: -22px; right: 72px;
+          width: 0; height: 0;
+          border-left: 16px solid transparent;
+          border-right: 16px solid transparent;
+          border-bottom: 22px solid #9147ff;
+        "></div>
+        <div style="
+          position: absolute; top: -17px; right: 73px;
+          width: 0; height: 0;
+          border-left: 15px solid transparent;
+          border-right: 15px solid transparent;
+          border-bottom: 18px solid #18181b;
+          z-index: 1;
+        "></div>
+
+        <div style="font-size: 60px; margin-bottom: 16px; display: block; animation: _tdt_icon_bounce 1.6s ease-in-out 0.6s infinite; line-height: 1;">🎁</div>
+        <div style="color: #9147ff; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 14px;">Twitch Drops Tracker</div>
+        <div style="color: #efeff1; font-weight: 700; font-size: 28px; line-height: 1.2; margin-bottom: 12px;">${title}</div>
+        <div style="color: #adadb8; font-size: 17px; line-height: 1.55;">${sub}</div>
+      </div>
+    `;
+
+    // Append to documentElement (<html>) so body zoom doesn't shrink it
+    document.documentElement.appendChild(bubble);
+
+    setTimeout(() => {
+      const el = document.getElementById(BUBBLE_ID);
+      if (!el) return;
+      el.style.animation = '_tdt_fade_out 0.35s ease forwards !important';
+      setTimeout(() => {
+        el?.remove();
+        document.getElementById(BUBBLE_STYLE_ID)?.remove();
+      }, 350);
+    }, 4500);
+  }
+
+  // ==========================================================================
+  // Game Filter
+  // ==========================================================================
+  function getGameFilter() {
+    try {
+      const filterData = document.documentElement.getAttribute('data-twitch-drops-filter');
+      if (filterData) {
+        return JSON.parse(filterData);
+      }
+    } catch (e) {
+      log.error('Failed to parse game filter:', e);
+    }
+    return { enabled: false, games: {} };
+  }
+
+  function isGameAllowed(gameName) {
+    const filter = getGameFilter();
+    if (!filter.enabled) return true; // No filtering active
+    if (!gameName) return true; // Can't determine game, allow it
+    return filter.games[gameName] !== false; // Allow if checked or not in list
+  }
+
+  function getActiveGameCount() {
+    const filter = getGameFilter();
+    if (!filter.enabled) return null; // No filtering
+    return Object.values(filter.games).filter(v => v === true).length;
+  }
+
+  /**
+   * Try to find the game name from the DOM near a button
+   */
+  function findGameNameForButton(btn) {
+    // Look for a campaign card container
+    const card = btn.closest('[class*="campaign"], [class*="Campaign"], [data-test-selector*="campaign"]') ||
+                 btn.closest('[class*="ScTower"], [class*="Layout"]');
+
+    if (card) {
+      // Try to find game title in the card
+      const titleEl = card.querySelector('h3, h4, [class*="title" i], [class*="game" i], p');
+      if (titleEl?.textContent) {
+        const text = titleEl.textContent.trim();
+        // Check if this matches any known campaign game name
+        const matchedCampaign = state.campaigns.find(c =>
+          c.game?.displayName === text || c.name === text
+        );
+        if (matchedCampaign) {
+          return matchedCampaign.game?.displayName || matchedCampaign.name;
+        }
+      }
+
+      // Try to match by looking at all text in the card
+      const cardText = card.textContent || '';
+      for (const campaign of state.campaigns) {
+        const gameName = campaign.game?.displayName || campaign.name;
+        if (gameName && cardText.includes(gameName)) {
+          return gameName;
+        }
+      }
+    }
+
+    return null;
+  }
 
   // ==========================================================================
   // Campaign Expansion Logic
@@ -404,7 +606,12 @@
      * Expand all campaigns sequentially
      */
     async expandAll() {
-      notification.show('⚠️ Keep this tab focused! Loading drops...', false, true);
+      showSpeechBubble();
+
+      // Check if filtering is active
+      const activeGames = getActiveGameCount();
+      const filterMsg = activeGames !== null ? ' ' + tNotif('notif_games_selected', {count: activeGames}) : '';
+      notification.show(tNotif('notif_keep_focused') + filterMsg, false, true);
 
       // Try to keep the tab active by requesting visibility
       this.keepTabActive();
@@ -426,6 +633,7 @@
       }
 
       let totalExpanded = 0;
+      let skippedFiltered = 0;
       const clickedButtons = new Set();
 
       for (let i = 0; i < CONFIG.MAX_ITERATIONS; i++) {
@@ -441,16 +649,26 @@
           const btnId = this.getButtonId(btn, allButtons);
           if (clickedButtons.has(btnId)) continue;
 
+          // Check if this campaign's game is allowed by the filter
+          const gameName = findGameNameForButton(btn);
+          if (gameName && !isGameAllowed(gameName)) {
+            clickedButtons.add(btnId); // Mark as handled so we don't check again
+            skippedFiltered++;
+            log.info(`Skipping filtered game: ${gameName}`);
+            continue;
+          }
+
           // Scroll into view and click
           btn.scrollIntoView({ behavior: 'instant', block: 'center' });
           await this.delay(CONFIG.EXPAND_CLICK_DELAY);
+          const responseTimeBefore = state.lastApiResponse;
           btn.click();
           clickedButtons.add(btnId);
           totalExpanded++;
           expandedThisRound++;
 
           // Wait for API responses to settle (smart wait for large campaigns)
-          await this.waitForApiResponse();
+          await this.waitForApiResponse(responseTimeBefore);
 
           // Check for expired campaign
           const lastDetailId = Object.keys(state.details).pop();
@@ -461,7 +679,8 @@
 
           // Update progress
           if (totalExpanded % 5 === 0) {
-            notification.update(`Loading... ${Object.keys(state.details).length} campaigns`);
+            const skipMsg = skippedFiltered > 0 ? tNotif('notif_loading_skip', {skipped: skippedFiltered}) : '';
+            notification.update(tNotif('notif_loading_count', {count: Object.keys(state.details).length}) + skipMsg);
           }
         }
 
@@ -481,13 +700,13 @@
         }
       }
 
-      this.finalize(totalExpanded);
+      this.finalize(totalExpanded, skippedFiltered);
     },
 
     /**
      * Finalize expansion process
      */
-    finalize(totalExpanded) {
+    finalize(totalExpanded, skippedFiltered = 0) {
       // Stop keeping tab active
       this.stopKeepingTabActive();
 
@@ -498,22 +717,30 @@
       window.history.replaceState({}, '', window.location.pathname);
       window.scrollTo(0, 0);
 
-      const count = Math.max(state.campaigns.length, Object.keys(state.details).length);
-      log.info(`Finalize: expanded=${totalExpanded}, campaigns=${state.campaigns.length}, details=${Object.keys(state.details).length}`);
+      const campaignCount = state.campaigns.length;
+      const detailsCount = Object.keys(state.details).length;
+      const totalDrops = Object.values(state.details).reduce((sum, drops) => sum + (drops?.length || 0), 0);
+      const skipMsg = skippedFiltered > 0 ? tNotif('notif_done_skip', {filtered: skippedFiltered}) : '';
 
-      if (count === 0 && totalExpanded === 0) {
-        notification.show('No campaigns found. Page may not have loaded properly. Try again.', true);
-      } else if (count === 0) {
-        notification.show(`Clicked ${totalExpanded} buttons but no data captured. Try refreshing.`, true);
+      log.info(`Finalize: expanded=${totalExpanded}, skipped=${skippedFiltered}, campaigns=${campaignCount}, details=${detailsCount}, drops=${totalDrops}`);
+
+      if (campaignCount === 0 && totalExpanded === 0) {
+        notification.show(tNotif('notif_no_campaigns'), true);
+      } else if (detailsCount === 0 || totalDrops === 0) {
+        if (skippedFiltered > 0) {
+          notification.show(tNotif('notif_all_skipped', {count: skippedFiltered}), false);
+        } else {
+          notification.show(tNotif('notif_no_details', {count: campaignCount}), true);
+        }
       } else {
-        notification.show(`Done! Loaded ${count} campaigns. Closing tab in 3 seconds...`);
+        notification.show(tNotif('notif_done', {drops: totalDrops, campaigns: detailsCount, skip: skipMsg}));
         // Auto-close tab after 3 seconds
         setTimeout(() => {
           window.close();
         }, 3000);
       }
 
-      log.info(`Expanded ${totalExpanded} campaigns, captured ${count} total`);
+      log.info(`Expanded ${totalExpanded} campaigns, skipped ${skippedFiltered}, captured ${detailsCount} with details`);
     },
 
     /**
@@ -538,9 +765,9 @@
       // Listen for visibility changes and warn user
       this.visibilityHandler = () => {
         if (document.hidden) {
-          notification.show('⚠️ Tab lost focus! Click here to continue loading.', true, true);
+          notification.show(tNotif('notif_tab_lost'), true, true);
         } else {
-          notification.show('Loading drop details...', false, true);
+          notification.show(tNotif('notif_loading_details'), false, true);
         }
       };
       document.addEventListener('visibilitychange', this.visibilityHandler);
@@ -576,21 +803,15 @@
      * Wait for API responses to settle after clicking expand
      * This ensures we capture all drops from large campaigns
      */
-    async waitForApiResponse() {
+    async waitForApiResponse(responseTimeBefore = 0) {
       const startTime = Date.now();
 
       // Quick initial wait for request to start
       await this.delay(30);
 
-      // If no pending requests and no recent response, exit quickly
-      if (state.pendingRequests === 0 && Date.now() - state.lastApiResponse > CONFIG.API_SETTLE_TIME) {
-        return;
-      }
-
-      // Wait for pending requests to complete
+      // Only exit once a response newer than before this click has fully settled
       while (Date.now() - startTime < CONFIG.API_RESPONSE_TIMEOUT) {
-        if (state.pendingRequests === 0) {
-          // No pending requests - wait a short settle time then exit
+        if (state.pendingRequests === 0 && state.lastApiResponse > responseTimeBefore) {
           const timeSinceLastResponse = Date.now() - state.lastApiResponse;
           if (timeSinceLastResponse >= CONFIG.API_SETTLE_TIME) {
             break;

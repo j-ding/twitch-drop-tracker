@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitch Drops Tracker</title>
+  <link rel="stylesheet" href="fullpage.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <!-- Background Effects -->
+    <div class="bg-effects">
+      <div class="bg-glow bg-glow-1"></div>
+      <div class="bg-glow bg-glow-2"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <img src="../icons/icon48.png" alt="Logo" class="header-logo">
+          <h1 class="header-title">Twitch Drops Tracker</h1>
+        </div>
+        <div class="header-center">
+          <div class="search-container">
+            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.3-4.3"></path>
+            </svg>
+            <input type="text" id="search-input" class="search-input" placeholder="Search campaigns..." data-i18n-placeholder="search_campaigns">
+          </div>
+        </div>
+        <div class="header-right">
+          <select id="language-select" class="language-select" data-i18n-title="settings_language"></select>
+          <button id="filter-btn" class="header-btn" title="Filter Games" data-i18n-title="title_filter_games">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            <span data-i18n="btn_filter">Filter</span>
+          </button>
+          <button id="refresh-btn" class="header-btn primary" title="Refresh" data-i18n-title="title_refresh">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            <span data-i18n="btn_refresh">Refresh</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stats-content">
+        <div class="stat-item">
+          <span class="stat-value" id="stat-campaigns">0</span>
+          <span class="stat-label" data-i18n="stat_campaigns">Campaigns</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-in-progress">0</span>
+          <span class="stat-label" data-i18n="stat_in_progress">In Progress</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-claimable">0</span>
+          <span class="stat-label" data-i18n="stat_ready_to_claim">Ready to Claim</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-claimed">0</span>
+          <span class="stat-label" data-i18n="stat_claimed">Claimed</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value" id="last-updated">Never</span>
+          <span class="stat-label" data-i18n="stat_last_updated">Last Updated</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <div class="tabs">
+        <button class="tab active" data-tab="campaigns">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+          <span data-i18n="tab_campaigns">Campaigns</span>
+        </button>
+        <button class="tab" data-tab="progress">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          <span data-i18n="tab_my_progress">My Progress</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Campaigns Tab -->
+      <div id="campaigns-tab" class="tab-content active">
+        <div id="campaigns-grid" class="campaigns-grid">
+          <!-- Loading state -->
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p data-i18n="loading_campaigns">Click refresh to load campaigns</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Tab -->
+      <div id="progress-tab" class="tab-content">
+        <div id="progress-grid" class="progress-grid">
+          <!-- Loading state -->
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p data-i18n="loading_progress">Click refresh to load progress</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Game Filter Sidebar -->
+    <div id="filter-sidebar" class="filter-sidebar">
+      <div class="filter-header">
+        <h3 data-i18n="filter_games_title">Filter Games</h3>
+        <button id="close-filter-btn" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="filter-search">
+        <svg class="filter-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.3-4.3"></path>
+        </svg>
+        <input type="text" id="filter-search-input" class="filter-search-input" placeholder="Search games..." data-i18n-placeholder="search_games">
+      </div>
+      <div class="filter-actions">
+        <button id="select-all-btn" class="filter-action-btn" data-i18n="btn_select_all">Select All</button>
+        <button id="deselect-all-btn" class="filter-action-btn" data-i18n="btn_deselect_all">Deselect All</button>
+      </div>
+      <div class="filter-hide-option">
+        <label class="filter-hide-label">
+          <input type="checkbox" id="hide-filtered-checkbox" class="filter-hide-checkbox">
+          <span data-i18n="filter_hide_label">Hide filtered games from list</span>
+        </label>
+      </div>
+      <div id="filter-games-list" class="filter-games-list">
+        <!-- Games will be populated here -->
+      </div>
+    </div>
+    <div id="filter-overlay" class="filter-overlay"></div>
+
+    <!-- Scan Hint -->
+    <div id="scan-hint" class="scan-hint hidden" data-i18n="hint_keep_tab_focused">
+      ⚠️ Keep the new tab focused while loading drop details!
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-content">
+        <a href="https://www.twitch.tv/drops/campaigns" target="_blank" class="footer-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+          <span data-i18n="footer_open_twitch">Open Twitch Drops</span>
+        </a>
+        <span class="footer-divider">|</span>
+        <button id="load-all-drops-btn" class="footer-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span data-i18n="footer_load_drops">Load All Drop Details</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="../i18n.js"></script>
+  <script src="fullpage.js"></script>
+</body>
+</html>

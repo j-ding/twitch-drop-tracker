@@ -1,6 +1,6 @@
 /**
- * Twitch Drops Tracker - Popup Script
- * Handles UI rendering and user interactions
+ * Twitch Drops Tracker - Full Page Script
+ * Enhanced version with glassmorphism UI
  */
 
 // =============================================================================
@@ -16,6 +16,7 @@ const log = {
 // =============================================================================
 let gameFilter = { enabled: false, games: {}, hideFiltered: false };
 let allCampaigns = [];
+let searchQuery = '';
 let filterSearchQuery = '';
 
 // =============================================================================
@@ -23,10 +24,11 @@ let filterSearchQuery = '';
 // =============================================================================
 document.addEventListener('DOMContentLoaded', async () => {
   await i18n.init();
+  initLanguageSelector();
   initTabs();
   initButtons();
-  initSettings();
   initFilter();
+  initSearch();
   loadStoredData();
 });
 
@@ -43,42 +45,14 @@ function initTabs() {
 
 function initButtons() {
   document.getElementById('refresh-btn').addEventListener('click', refreshData);
-  document.getElementById('clear-cache-btn').addEventListener('click', clearCache);
-  document.getElementById('open-campaigns-btn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://www.twitch.tv/drops/campaigns' });
+  document.getElementById('load-all-drops-btn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://www.twitch.tv/drops/campaigns?loadAllDrops=true' });
+    const hint = document.getElementById('scan-hint');
+    if (hint) {
+      hint.classList.remove('hidden');
+      setTimeout(() => hint.classList.add('hidden'), 12000);
+    }
   });
-  document.getElementById('open-inventory-btn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://www.twitch.tv/drops/inventory' });
-  });
-  document.getElementById('load-all-drops-btn').addEventListener('click', loadAllDrops);
-}
-
-function loadAllDrops() {
-  chrome.tabs.create({ url: 'https://www.twitch.tv/drops/campaigns?loadAllDrops=true' });
-  const hint = document.getElementById('scan-hint');
-  if (hint) {
-    hint.classList.remove('hidden');
-    setTimeout(() => hint.classList.add('hidden'), 12000);
-  }
-}
-
-// =============================================================================
-// Settings
-// =============================================================================
-function initSettings() {
-  const settingsBtn = document.getElementById('settings-btn');
-  const closeSettingsBtn = document.getElementById('close-settings-btn');
-  const settingsPanel = document.getElementById('settings-panel');
-
-  settingsBtn.addEventListener('click', () => {
-    settingsPanel.classList.toggle('hidden');
-  });
-
-  closeSettingsBtn.addEventListener('click', () => {
-    settingsPanel.classList.add('hidden');
-  });
-
-  initLanguageSelector();
 }
 
 function initLanguageSelector() {
@@ -96,6 +70,19 @@ function initLanguageSelector() {
   select.addEventListener('change', () => i18n.setLanguage(select.value));
 }
 
+function initSearch() {
+  const searchInput = document.getElementById('search-input');
+  let debounceTimer;
+
+  searchInput.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      searchQuery = e.target.value.toLowerCase().trim();
+      renderCampaigns(allCampaigns);
+    }, 200);
+  });
+}
+
 // =============================================================================
 // Game Filter
 // =============================================================================
@@ -106,7 +93,6 @@ async function initFilter() {
   const filterOverlay = document.getElementById('filter-overlay');
   const selectAllBtn = document.getElementById('select-all-btn');
   const deselectAllBtn = document.getElementById('deselect-all-btn');
-  const fullviewBtn = document.getElementById('fullview-btn');
 
   // Load saved filter
   const data = await chrome.storage.local.get(['gameFilter']);
@@ -123,26 +109,17 @@ async function initFilter() {
   const hideFilteredCheckbox = document.getElementById('hide-filtered-checkbox');
   hideFilteredCheckbox.checked = gameFilter.hideFiltered;
 
-  // Update filter button indicator
   updateFilterButtonState();
 
   // Toggle filter sidebar
   filterBtn.addEventListener('click', () => {
-    filterSidebar.classList.remove('hidden');
-    filterOverlay.classList.remove('hidden');
-    setTimeout(() => {
-      filterSidebar.classList.add('visible');
-      filterOverlay.classList.add('visible');
-    }, 10);
+    filterSidebar.classList.add('visible');
+    filterOverlay.classList.add('visible');
   });
 
   const closeFilter = () => {
     filterSidebar.classList.remove('visible');
     filterOverlay.classList.remove('visible');
-    setTimeout(() => {
-      filterSidebar.classList.add('hidden');
-      filterOverlay.classList.add('hidden');
-    }, 250);
   };
 
   closeFilterBtn.addEventListener('click', closeFilter);
@@ -167,11 +144,6 @@ async function initFilter() {
     renderFilterList();
   });
 
-  // Full view button
-  fullviewBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('fullpage/fullpage.html') });
-  });
-
   // Filter search input
   const filterSearchInput = document.getElementById('filter-search-input');
   filterSearchInput.addEventListener('input', (e) => {
@@ -180,11 +152,10 @@ async function initFilter() {
   });
 
   // Clear search when closing sidebar
-  const originalCloseFilter = closeFilter;
   const closeFilterWithClear = () => {
     filterSearchInput.value = '';
     filterSearchQuery = '';
-    originalCloseFilter();
+    closeFilter();
   };
   closeFilterBtn.removeEventListener('click', closeFilter);
   filterOverlay.removeEventListener('click', closeFilter);
@@ -205,7 +176,6 @@ function updateFilterButtonState() {
 }
 
 function populateFilterGames(campaigns) {
-  // Extract unique games
   const games = new Map();
   campaigns.forEach(c => {
     if (c.game && !games.has(c.game)) {
@@ -213,21 +183,18 @@ function populateFilterGames(campaigns) {
     }
   });
 
-  // Initialize new games (default to checked)
   games.forEach((imageUrl, gameName) => {
     if (!(gameName in gameFilter.games)) {
       gameFilter.games[gameName] = true;
     }
   });
 
-  // Remove games that no longer exist
   Object.keys(gameFilter.games).forEach(gameName => {
     if (!games.has(gameName)) {
       delete gameFilter.games[gameName];
     }
   });
 
-  // Check if any filter is active
   gameFilter.enabled = Object.values(gameFilter.games).some(v => v === false);
 
   renderFilterList();
@@ -248,7 +215,7 @@ function renderFilterList() {
 
   if (sortedGames.length === 0 && filterSearchQuery) {
     container.innerHTML = `
-      <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px;">
+      <div style="text-align: center; padding: 30px; color: var(--text-muted); font-size: 14px;">
         No games match "${escapeHtml(filterSearchQuery)}"
       </div>
     `;
@@ -271,7 +238,6 @@ function renderFilterList() {
     `;
   }).join('');
 
-  // Add click handlers
   container.querySelectorAll('.filter-game-item').forEach(item => {
     item.addEventListener('click', () => {
       const gameName = item.dataset.game;
@@ -316,6 +282,7 @@ async function loadStoredData() {
     }
     if (data.inventory) renderMyProgress(data.inventory);
     if (data.lastUpdated) updateLastUpdated(data.lastUpdated);
+    updateStats(data.campaigns || [], data.inventory || {});
   } catch (error) {
     log.error('Error loading stored data:', error.message);
   }
@@ -333,6 +300,7 @@ async function refreshData() {
       renderCampaigns(allCampaigns);
       renderMyProgress(response.inventory || {});
       updateLastUpdated(new Date().toISOString());
+      updateStats(allCampaigns, response.inventory || {});
     } else {
       showError(response.error || t('error_not_logged_in'));
     }
@@ -344,49 +312,59 @@ async function refreshData() {
   }
 }
 
-async function clearCache() {
-  try {
-    await chrome.storage.local.clear();
-    const emptyState = `
-      <div class="empty-state">
-        <div class="empty-state-icon">🗑️</div>
-        <p>${t('cache_cleared')}</p>
-        <p style="font-size: 11px; margin-top: 4px;">${t('cache_cleared_hint')}</p>
-      </div>
-    `;
-    document.getElementById('campaigns-list').innerHTML = emptyState;
-    document.getElementById('progress-list').innerHTML = emptyState;
-    document.getElementById('last-updated').textContent = t('cache_cleared');
-  } catch (error) {
-    log.error('Error clearing cache:', error.message);
-  }
+function updateStats(campaigns, inventory) {
+  const { inProgress = [], claimable = [], claimed = [] } = inventory;
+
+  document.getElementById('stat-campaigns').textContent = campaigns.length;
+  document.getElementById('stat-in-progress').textContent = inProgress.length;
+  document.getElementById('stat-claimable').textContent = claimable.length;
+  document.getElementById('stat-claimed').textContent = claimed.length;
 }
 
 // =============================================================================
 // Campaigns Tab Rendering
 // =============================================================================
 function renderCampaigns(campaigns) {
-  const container = document.getElementById('campaigns-list');
+  const container = document.getElementById('campaigns-grid');
 
   if (!campaigns?.length) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-state-icon">📭</div>
         <p>${t('empty_no_campaigns')}</p>
-        <p style="font-size: 11px; margin-top: 4px;">${t('loading_campaigns')}</p>
+        <p style="font-size: 13px; margin-top: 8px; color: var(--text-muted);">${t('loading_campaigns')}</p>
       </div>
     `;
     return;
   }
 
-  let sorted = [...campaigns].sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
+  // Apply search filter
+  let filtered = campaigns;
+  if (searchQuery) {
+    filtered = campaigns.filter(c =>
+      c.game?.toLowerCase().includes(searchQuery) ||
+      c.publisher?.toLowerCase().includes(searchQuery)
+    );
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🔍</div>
+        <p>${t('empty_no_results')}</p>
+        <p style="font-size: 13px; margin-top: 8px; color: var(--text-muted);">${t('empty_no_results_hint')}</p>
+      </div>
+    `;
+    return;
+  }
+
+  let sorted = [...filtered].sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
 
   // Filter out hidden games if hideFiltered is enabled
   if (gameFilter.hideFiltered) {
     sorted = sorted.filter(c => !isGameFiltered(c.game));
   }
 
-  // Use calendar day boundaries (end of each day at 23:59:59)
   const today = new Date();
   const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
   const tomorrowEnd = new Date(todayEnd.getTime() + 24 * 60 * 60 * 1000);
@@ -401,7 +379,6 @@ function renderCampaigns(campaigns) {
     later: sorted.filter(c => new Date(c.endDate) > weekEnd)
   };
 
-  // Sort each group: non-filtered first, then filtered
   const sortWithFilter = (arr) => {
     return arr.sort((a, b) => {
       const aFiltered = isGameFiltered(a.game);
@@ -464,7 +441,7 @@ function renderCampaignCard(campaign, urgency) {
 
   const dropsHtml = drops.length
     ? drops.map(renderDropItem).join('')
-    : `<div style="text-align: center; padding: 12px 0; color: var(--text-muted); font-size: 11px;">${t('drops_not_loaded_1')}<br>${t('drops_not_loaded_2')}</div>`;
+    : `<div style="text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px;">${t('drops_not_loaded_1')}<br>${t('drops_not_loaded_2')}</div>`;
 
   const gameSlug = gameNameToSlug(campaign.game);
 
@@ -477,7 +454,7 @@ function renderCampaignCard(campaign, urgency) {
           <div class="campaign-publisher">${escapeHtml(campaign.publisher || '')}</div>
           <div class="campaign-expiry ${expiryClass}">${t('expiry_prefix')}${formatExpiry(new Date(campaign.endDate))}</div>
         </div>
-        <svg class="expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="expand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </div>
@@ -526,7 +503,7 @@ function renderDropItem(drop) {
 // My Progress Tab Rendering
 // =============================================================================
 async function renderMyProgress(inventory) {
-  const container = document.getElementById('progress-list');
+  const container = document.getElementById('progress-grid');
   const { inProgress = [], claimable = [], claimed = [] } = inventory;
 
   if (!inProgress.length && !claimable.length && !claimed.length) {
@@ -534,23 +511,20 @@ async function renderMyProgress(inventory) {
       <div class="empty-state">
         <div class="empty-state-icon">🎯</div>
         <p>${t('empty_no_drops')}</p>
-        <p style="font-size: 11px; margin-top: 4px;">${t('empty_no_drops_hint')}</p>
+        <p style="font-size: 13px; margin-top: 8px; color: var(--text-muted);">${t('empty_no_drops_hint')}</p>
       </div>
     `;
     return;
   }
 
-  // Get full campaign data from storage to show all drops
   const { campaigns = [] } = await chrome.storage.local.get(['campaigns']);
 
-  // Find campaigns that have any progress (in_progress, claimable, or claimed drops)
   const activeCampaignIds = new Set([
     ...inProgress.map(d => d.campaignId),
     ...claimable.map(d => d.campaignId),
     ...claimed.map(d => d.campaignId)
   ].filter(Boolean));
 
-  // Get full campaign data for campaigns with progress
   const activeCampaigns = campaigns
     .filter(c => activeCampaignIds.has(c.id) ||
       c.drops?.some(d => ['in_progress', 'claimable', 'claimed'].includes(d.status)))
@@ -558,13 +532,11 @@ async function renderMyProgress(inventory) {
 
   let html = '';
 
-  // Claimable drops section
   if (claimable.length) {
     html += `<div class="section-header" style="color: var(--accent-purple);">${t('section_ready_to_claim', {count: claimable.length})}</div>`;
     html += claimable.map(d => renderProgressCard(d, 'claimable')).join('');
   }
 
-  // In-progress campaigns with full drop details
   const inProgressCampaigns = activeCampaigns.filter(c =>
     c.drops?.some(d => d.status === 'in_progress' || d.status === 'claimable'));
 
@@ -573,12 +545,11 @@ async function renderMyProgress(inventory) {
     html += inProgressCampaigns.map(renderProgressCampaignCard).join('');
   }
 
-  // Claimed drops (collapsible)
   if (claimed.length) {
     html += `
       <div class="collapsible-header section-header" id="claimed-header">
         <span>${t('section_recently_claimed', {count: claimed.length})}</span>
-        <svg class="expand-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </div>
@@ -618,20 +589,17 @@ function renderProgressCampaignCard(campaign) {
   const urgencyClass = endDate <= new Date(now).setHours(23, 59, 59, 999) ? 'expiring-today' :
                        endDate <= new Date(now + 7 * 24 * 60 * 60 * 1000) ? 'expiring-soon' : '';
 
-  // Check if we likely have incomplete data (only in-progress drops, no locked drops)
   const hasLockedDrops = drops.some(d => d.status === 'locked');
   const likelyIncomplete = drops.length <= inProgressCount + claimedCount && !hasLockedDrops && drops.length < 3;
 
-  // Calculate overall progress across all drops (cap each drop at 100%)
   const totalProgress = drops.reduce((sum, d) => {
     const progress = d.progressMinutes || 0;
     const required = d.requiredMinutes || 60;
-    return sum + Math.min(progress, required); // Cap at required
+    return sum + Math.min(progress, required);
   }, 0);
   const totalRequired = drops.reduce((sum, d) => sum + (d.requiredMinutes || 60), 0);
   const overallPercent = Math.min(100, Math.round((totalProgress / totalRequired) * 100));
 
-  // Render all drops with their respective statuses
   const dropsHtml = drops.map(drop => {
     const progress = drop.progressMinutes || 0;
     const required = drop.requiredMinutes || 60;
@@ -665,9 +633,8 @@ function renderProgressCampaignCard(campaign) {
     `;
   }).join('');
 
-  // Add a note if campaign data might be incomplete
   const incompleteNote = likelyIncomplete
-    ? `<div style="text-align: center; padding: 8px; color: var(--text-muted); font-size: 10px; border-top: 1px solid var(--border);">${t('drops_incomplete')}</div>`
+    ? `<div style="text-align: center; padding: 10px; color: var(--text-muted); font-size: 11px; border-top: 1px solid var(--border);">${t('drops_incomplete')}</div>`
     : '';
 
   const gameSlug = gameNameToSlug(campaign.game);
@@ -679,12 +646,12 @@ function renderProgressCampaignCard(campaign) {
         <div class="campaign-info">
           <div class="campaign-name">${escapeHtml(campaign.game)} <span class="campaign-status in-progress">${claimedCount}/${drops.length}${likelyIncomplete ? '+' : ''}</span></div>
           <div class="campaign-expiry">${t('expiry_prefix')}${formatExpiry(endDate)}</div>
-          <div class="progress-container" style="margin-top: 4px;">
+          <div class="progress-container" style="margin-top: 6px;">
             <div class="progress-bar"><div class="progress-fill ${overallPercent >= 100 ? 'complete' : ''}" style="width: ${Math.min(100, overallPercent)}%"></div></div>
             <span class="progress-text">${overallPercent}%</span>
           </div>
         </div>
-        <svg class="expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="expand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </div>
@@ -714,13 +681,11 @@ function renderProgressCard(drop, type) {
 function attachCardListeners(container) {
   container.querySelectorAll('.campaign-header').forEach(header => {
     header.addEventListener('click', (e) => {
-      // Don't toggle if clicking on the game image
       if (e.target.classList.contains('campaign-image')) return;
       header.closest('.campaign-card').classList.toggle('expanded');
     });
   });
 
-  // Add click listeners for game images
   container.querySelectorAll('.campaign-image.clickable').forEach(img => {
     img.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -732,10 +697,6 @@ function attachCardListeners(container) {
   });
 }
 
-/**
- * Convert game name to Twitch directory slug
- * e.g., "Vampire: The Masquerade - Bloodhunt" -> "vampire-the-masquerade-bloodhunt"
- */
 function gameNameToSlug(gameName) {
   if (!gameName) return '';
 
@@ -756,12 +717,12 @@ function gameNameToSlug(gameName) {
 
   return gameName
     .toLowerCase()
-    .replace(/[:']/g, '')           // Remove colons and apostrophes
-    .replace(/&/g, 'and')           // Replace & with 'and'
-    .replace(/[^a-z0-9\s-]/g, '')   // Remove special characters except spaces and hyphens
-    .replace(/\s+/g, '-')           // Replace spaces with hyphens
-    .replace(/-+/g, '-')            // Replace multiple hyphens with single
-    .replace(/^-|-$/g, '');         // Remove leading/trailing hyphens
+    .replace(/[:']/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 window.toggleClaimed = () => document.getElementById('claimed-section')?.classList.toggle('expanded');
@@ -769,9 +730,9 @@ window.openInventory = () => chrome.tabs.create({ url: 'https://www.twitch.tv/dr
 
 function updateLastUpdated(isoString) {
   const diffMins = Math.floor((Date.now() - new Date(isoString)) / 60000);
-  const text = diffMins < 1 ? t('last_updated_now') :
-               diffMins < 60 ? t('last_updated_ago', {minutes: diffMins}) :
-               `Updated: ${new Date(isoString).toLocaleTimeString()}`;
+  const text = diffMins < 1 ? t('fullpage_now') :
+               diffMins < 60 ? t('fullpage_ago', {minutes: diffMins}) :
+               new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   document.getElementById('last-updated').textContent = text;
 }
 
@@ -798,7 +759,7 @@ function escapeHtml(text) {
 }
 
 function showError(message) {
-  document.getElementById('campaigns-list').innerHTML = `
+  document.getElementById('campaigns-grid').innerHTML = `
     <div class="empty-state">
       <div class="empty-state-icon">⚠️</div>
       <p>${escapeHtml(message)}</p>

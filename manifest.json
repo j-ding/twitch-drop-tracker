@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Twitch Drops Tracker",
-  "version": "1.1.1",
+  "version": "1.2.3",
   "description": "Track your Twitch drops campaigns and progress, sorted by expiration date",
   "permissions": [
     "storage",
@@ -40,6 +40,12 @@
       "matches": ["https://www.twitch.tv/drops/*"],
       "js": ["content-isolated.js"],
       "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["fullpage/*", "icons/*", "locales/*", "i18n.js"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

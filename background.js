@@ -403,9 +403,17 @@ const campaignMerger = {
   },
 
   checkCompletion(drops, completedInfo) {
-    if (completedInfo) return true;
+    // If all drops are claimed, it's complete
     if (drops.length > 0 && drops.every(d => d.status === 'claimed')) return true;
-    if (drops.some(d => d.claimedByNameMatch)) return true;
+
+    // If any drop is actively in progress or claimable, it's NOT complete
+    // (even if completedInfo exists from a previous partial claim)
+    const hasActiveProgress = drops.some(d => d.status === 'in_progress' || d.status === 'claimable');
+    if (hasActiveProgress) return false;
+
+    // No active progress - trust completedInfo (API may have stopped tracking finished campaigns)
+    if (completedInfo) return true;
+
     return false;
   }
 };

@@ -664,6 +664,35 @@ body {
   margin-top: 2px;
 }
 
+/* Changelog */
+.changelog {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.changelog-version {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-purple);
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.changelog-version:first-child {
+  margin-top: 0;
+}
+
+.changelog-item {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 2px;
+  padding-left: 4px;
+}
+
 /* Toggle Switch */
 .toggle-switch {
   position: relative;
@@ -845,4 +874,289 @@ body {
 .load-details-btn:hover {
   background-color: var(--accent-purple);
   border-color: var(--accent-purple);
+}
+
+/* Game Filter Sidebar */
+.filter-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 280px;
+  height: 100%;
+  background-color: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+
+.filter-sidebar.visible {
+  transform: translateX(0);
+}
+
+.filter-sidebar.hidden {
+  display: flex;
+  transform: translateX(100%);
+}
+
+.filter-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 140;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.filter-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.filter-search {
+  position: relative;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-search-icon {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.filter-search-input {
+  width: 100%;
+  padding: 8px 10px 8px 32px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.filter-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.filter-search-input:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 0 2px rgba(145, 71, 255, 0.2);
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-action-btn {
+  flex: 1;
+  padding: 6px 10px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-action-btn:hover {
+  background-color: var(--accent-purple);
+  border-color: var(--accent-purple);
+  color: var(--text-primary);
+}
+
+.filter-hide-option {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-hide-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-hide-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent-purple);
+}
+
+.filter-hide-label:hover {
+  color: var(--text-primary);
+}
+
+.filter-games-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.filter-game-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.filter-game-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.filter-game-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.filter-game-item.checked .filter-game-checkbox {
+  background-color: var(--accent-purple);
+  border-color: var(--accent-purple);
+}
+
+.filter-game-checkbox svg {
+  display: none;
+  width: 12px;
+  height: 12px;
+  stroke: white;
+  stroke-width: 3;
+}
+
+.filter-game-item.checked .filter-game-checkbox svg {
+  display: block;
+}
+
+.filter-game-image {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+  background-color: var(--bg-tertiary);
+}
+
+.filter-game-name {
+  flex: 1;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Updates Off Badge */
+.updates-off-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background-color: rgba(134, 134, 134, 0.3);
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+/* Filtered Campaign Styles */
+.campaign-card.filtered-out {
+  opacity: 0.45;
+  filter: grayscale(40%);
+}
+
+.campaign-card.filtered-out:hover {
+  opacity: 0.6;
+  border-color: var(--border);
+}
+
+/* Filter Active Indicator */
+.icon-btn.filter-active {
+  background-color: var(--accent-purple);
+}
+
+/* Scrollbar for filter list */
+.filter-games-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.filter-games-list::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+.filter-games-list::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+.filter-games-list::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-purple);
+}
+
+/* Language Select */
+.language-select {
+  padding: 4px 8px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.language-select:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+}
+
+/* Scan Hint Banner */
+.scan-hint {
+  padding: 8px 12px;
+  background-color: rgba(255, 171, 0, 0.15);
+  border-top: 1px solid rgba(255, 171, 0, 0.3);
+  color: var(--warning);
+  font-size: 11px;
+  text-align: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }

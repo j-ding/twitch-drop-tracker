@@ -1,0 +1,11 @@
+# Twitch Drop Tracker - Chrome Extension Zip Config
+
+include:
+  - manifest.json
+  - background.js
+  - content-main.js
+  - content-isolated.js
+  - icons/*
+  - popup/*
+
+exclude: []

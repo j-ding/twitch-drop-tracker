@@ -15,13 +15,18 @@
         <span>Twitch Drops</span>
       </div>
       <div class="header-actions">
-        <button id="clear-cache-btn" class="icon-btn" title="Clear Cache">
+        <button id="filter-btn" class="icon-btn" title="Filter Games" data-i18n-title="title_filter_games">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+        </button>
+        <button id="clear-cache-btn" class="icon-btn" title="Clear Cache" data-i18n-title="title_clear_cache">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
           </svg>
         </button>
-        <button id="refresh-btn" class="icon-btn" title="Refresh">
+        <button id="refresh-btn" class="icon-btn" title="Refresh" data-i18n-title="title_refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M23 4v6h-6M1 20v-6h6"/>
             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
@@ -32,8 +37,8 @@
 
     <!-- Tabs -->
     <div class="tabs">
-      <button class="tab active" data-tab="campaigns">Campaigns</button>
-      <button class="tab" data-tab="progress">My Progress</button>
+      <button class="tab active" data-tab="campaigns" data-i18n="tab_campaigns">Campaigns</button>
+      <button class="tab" data-tab="progress" data-i18n="tab_my_progress">My Progress</button>
     </div>
 
     <!-- Campaigns Tab Content -->
@@ -42,7 +47,7 @@
         <!-- Loading state -->
         <div class="loading-state">
           <div class="spinner"></div>
-          <p>Click refresh to load campaigns</p>
+          <p data-i18n="loading_campaigns">Click refresh to load campaigns</p>
         </div>
       </div>
       <div class="tab-footer two-buttons">
@@ -53,6 +58,9 @@
           📥 Load All Drop Details
         </button>
       </div>
+      <div id="scan-hint" class="scan-hint hidden" data-i18n="hint_keep_tab_focused">
+        ⚠️ Keep the new tab focused while loading drop details!
+      </div>
     </div>
 
     <!-- Progress Tab Content -->
@@ -61,7 +69,7 @@
         <!-- Loading state -->
         <div class="loading-state">
           <div class="spinner"></div>
-          <p>Click refresh to load progress</p>
+          <p data-i18n="loading_progress">Click refresh to load progress</p>
         </div>
       </div>
       <div class="tab-footer">
@@ -71,10 +79,44 @@
       </div>
     </div>
 
+    <!-- Game Filter Sidebar -->
+    <div id="filter-sidebar" class="filter-sidebar hidden">
+      <div class="filter-header">
+        <span data-i18n="filter_games_title">Filter Games</span>
+        <button id="close-filter-btn" class="icon-btn small">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="filter-search">
+        <svg class="filter-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.3-4.3"></path>
+        </svg>
+        <input type="text" id="filter-search-input" class="filter-search-input" placeholder="Search games..." data-i18n-placeholder="search_games">
+      </div>
+      <div class="filter-actions">
+        <button id="select-all-btn" class="filter-action-btn" data-i18n="btn_select_all">Select All</button>
+        <button id="deselect-all-btn" class="filter-action-btn" data-i18n="btn_deselect_all">Deselect All</button>
+      </div>
+      <div class="filter-hide-option">
+        <label class="filter-hide-label">
+          <input type="checkbox" id="hide-filtered-checkbox" class="filter-hide-checkbox">
+          <span data-i18n="filter_hide_label">Hide filtered games from list</span>
+        </label>
+      </div>
+      <div id="filter-games-list" class="filter-games-list">
+        <!-- Games will be populated here -->
+      </div>
+    </div>
+    <div id="filter-overlay" class="filter-overlay hidden"></div>
+
     <!-- Settings Panel (hidden by default) -->
     <div id="settings-panel" class="settings-panel hidden">
       <div class="settings-header">
-        <span>⚙️ Settings</span>
+        <span data-i18n="settings_title">⚙️ Settings</span>
         <button id="close-settings-btn" class="icon-btn small">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -85,9 +127,28 @@
       <div class="settings-content">
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-label">Version 1.1.1</div>
+            <div class="setting-label" data-i18n="settings_language">Language</div>
+          </div>
+          <select id="language-select" class="language-select"></select>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">Version 1.2.0</div>
             <div class="setting-description">Uses Twitch API directly for fast loading</div>
           </div>
+        </div>
+        <div class="changelog">
+          <div class="changelog-version">⚙️ NEW IN v1.2.0:</div>
+          <div class="changelog-item">• Game filter sidebar - Select which games to track with searchable checklist</div>
+          <div class="changelog-item">• Enhanced full-page view - Beautiful glassmorphism UI with animations (click 🖼️)</div>
+          <div class="changelog-item">• "Updates off" indicator for filtered games</div>
+          <div class="changelog-version">⚙️ NEW IN v1.1.3:</div>
+          <div class="changelog-item">• Smart API response waiting - Tracks pending GraphQL requests to capture all drops from large campaigns</div>
+          <div class="changelog-item">• Better completion messages - Shows "Loaded X drops from Y campaigns"</div>
+          <div class="changelog-version">⚙️ NEW IN v1.1.2:</div>
+          <div class="changelog-item">• Enhanced color indicators - 5-tier urgency system (red → orange → yellow → blue → gray)</div>
+          <div class="changelog-item">• Fixed race condition - Data persistence bug resolved</div>
+          <div class="changelog-item">• Fixed date boundaries - Campaigns no longer appear in multiple sections</div>
         </div>
       </div>
     </div>
@@ -95,10 +156,12 @@
     <!-- Footer -->
     <footer class="footer">
       <button id="settings-btn" class="settings-footer-btn" title="Settings">⚙️</button>
-      <span id="last-updated">Never updated</span>
+      <span id="last-updated" data-i18n="last_updated_never">Never updated</span>
+      <button id="fullview-btn" class="settings-footer-btn" title="Open Full View" data-i18n-title="title_open_full_view">🖼️</button>
     </footer>
   </div>
 
+  <script src="../i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

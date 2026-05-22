@@ -9,6 +9,37 @@
 let lastDropCount = 0;
 
 // =============================================================================
+// Locale Injection
+// =============================================================================
+async function injectLocale() {
+  try {
+    const { language = 'en' } = await chrome.storage.local.get(['language']);
+    const url = chrome.runtime.getURL(`locales/${language}.json`);
+    const resp = await fetch(url);
+    const strings = await resp.json();
+    document.documentElement.setAttribute('data-twitch-drops-locale', JSON.stringify(strings));
+  } catch (e) {
+    console.error('[TwitchDrops] Failed to inject locale:', e);
+  }
+}
+
+injectLocale();
+
+// =============================================================================
+// Game Filter Injection
+// =============================================================================
+async function injectFilter() {
+  try {
+    const { gameFilter = { enabled: false, games: {} } } = await chrome.storage.local.get(['gameFilter']);
+    document.documentElement.setAttribute('data-twitch-drops-filter', JSON.stringify(gameFilter));
+  } catch (e) {
+    console.error('[TwitchDrops] Failed to inject filter:', e);
+  }
+}
+
+injectFilter();
+
+// =============================================================================
 // Campaign Data Transformation
 // =============================================================================
 function transformCampaigns(rawCampaigns) {
