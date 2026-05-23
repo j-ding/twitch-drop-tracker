@@ -19,8 +19,9 @@
     HEADER_HEIGHT: 60,
     SIDEBAR_WIDTH: 80,
     // API response tracking
-    API_RESPONSE_TIMEOUT: 800,   // Max wait for API response (reduced from 3000)
-    API_SETTLE_TIME: 80          // Wait after last response before moving on (reduced from 150)
+    API_RESPONSE_TIMEOUT: 2000,  // Max wait per button if a GQL request is pending
+    API_SETTLE_TIME: 100,        // Wait after last response before moving on
+    API_CACHE_HIT_WAIT: 120      // If no GQL request fires within this many ms, assume cache hit and move on
   };
 
   // ==========================================================================
@@ -264,7 +265,7 @@
      * Enhanced to merge drops instead of replacing
      */
     searchDropsInResponse(obj, depth = 0) {
-      if (!obj || typeof obj !== 'object' || depth > 8) return;
+      if (!obj || typeof obj !== 'object' || depth > 15) return;
 
       // Found a campaign-like object with an ID
       if (obj.id && typeof obj.id === 'string') {
@@ -700,13 +701,21 @@
         }
       }
 
-      this.finalize(totalExpanded, skippedFiltered);
+      await this.finalize(totalExpanded, skippedFiltered);
     },
 
     /**
      * Finalize expansion process
      */
-    finalize(totalExpanded, skippedFiltered = 0) {
+    async finalize(totalExpanded, skippedFiltered = 0) {
+      // Drain any in-flight GQL requests before reading state
+      if (state.pendingRequests > 0) {
+        const drainStart = Date.now();
+        while (state.pendingRequests > 0 && Date.now() - drainStart < 3000) {
+          await this.delay(100);
+        }
+      }
+
       // Stop keeping tab active
       this.stopKeepingTabActive();
 
@@ -800,23 +809,30 @@
     delay: ms => new Promise(resolve => setTimeout(resolve, ms)),
 
     /**
-     * Wait for API responses to settle after clicking expand
-     * This ensures we capture all drops from large campaigns
+     * Wait for API responses to settle after clicking expand.
+     * Fast-exits if no GQL request is triggered (Twitch Apollo cache hit).
+     * Waits up to API_RESPONSE_TIMEOUT if a request IS pending (slow network).
      */
     async waitForApiResponse(responseTimeBefore = 0) {
       const startTime = Date.now();
 
-      // Quick initial wait for request to start
-      await this.delay(30);
+      // Give React enough time to process the click and trigger any fetch
+      await this.delay(80);
 
-      // Only exit once a response newer than before this click has fully settled
       while (Date.now() - startTime < CONFIG.API_RESPONSE_TIMEOUT) {
+        // A new response arrived and has settled — done
         if (state.pendingRequests === 0 && state.lastApiResponse > responseTimeBefore) {
           const timeSinceLastResponse = Date.now() - state.lastApiResponse;
-          if (timeSinceLastResponse >= CONFIG.API_SETTLE_TIME) {
-            break;
-          }
+          if (timeSinceLastResponse >= CONFIG.API_SETTLE_TIME) break;
         }
+
+        // No pending request and no new response — cache hit, skip quickly
+        if (Date.now() - startTime >= CONFIG.API_CACHE_HIT_WAIT &&
+            state.pendingRequests === 0 &&
+            state.lastApiResponse <= responseTimeBefore) {
+          break;
+        }
+
         await this.delay(30);
       }
     }
