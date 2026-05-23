@@ -722,13 +722,18 @@
       // Restore original zoom level
       document.body.style.zoom = this.originalZoom || '100%';
 
-      dispatchCampaigns();
       window.history.replaceState({}, '', window.location.pathname);
       window.scrollTo(0, 0);
 
       const campaignCount = state.campaigns.length;
       const detailsCount = Object.keys(state.details).length;
       const totalDrops = Object.values(state.details).reduce((sum, drops) => sum + (drops?.length || 0), 0);
+
+      // Only push data to storage if we actually captured drop details.
+      // Dispatching with 0 details would overwrite previously-good stored campaigns.
+      if (detailsCount > 0) {
+        dispatchCampaigns();
+      }
       const skipMsg = skippedFiltered > 0 ? tNotif('notif_done_skip', {filtered: skippedFiltered}) : '';
 
       log.info(`Finalize: expanded=${totalExpanded}, skipped=${skippedFiltered}, campaigns=${campaignCount}, details=${detailsCount}, drops=${totalDrops}`);

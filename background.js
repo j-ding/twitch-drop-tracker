@@ -229,7 +229,12 @@ const dataFetcher = {
 
   async getCachedCampaigns() {
     const { campaigns } = await storage.get(['campaigns']);
-    return campaigns?.length > 2 ? campaigns : null;
+    if (!campaigns?.length) return null;
+    // Only use cache if at least some campaigns have drop data.
+    // If all drops are empty (e.g. after a failed content-script scan), fall
+    // back to the GQL query so drops are re-fetched and My Progress stays accurate.
+    const hasDrops = campaigns.some(c => c.drops?.length > 0);
+    return (campaigns.length > 2 && hasDrops) ? campaigns : null;
   }
 };
 
@@ -681,9 +686,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.campaigns?.length > 0) {
         (async () => {
           const { completedCampaigns, completedGames } = await storage.getCompletionData();
-          const { inventory } = await storage.get(['inventory']);
+          const { inventory, campaigns: storedCampaigns = [] } = await storage.get(['inventory', 'campaigns']);
           const inv = inventory || { inProgress: [], claimable: [], claimed: [], gameEventDrops: [] };
-          const merged = campaignMerger.merge(request.campaigns, inv, completedCampaigns, completedGames);
+
+          // Preserve existing drop data: if an incoming campaign has fewer drops
+          // than what's already stored (e.g. a failed scan sent empty drops),
+          // keep the richer stored version so My Progress stays accurate.
+          const storedDropsById = new Map(storedCampaigns.map(c => [c.id, c.drops || []]));
+          const enriched = request.campaigns.map(c => {
+            const existingDrops = storedDropsById.get(c.id) || [];
+            const incomingDrops = c.drops || [];
+            return incomingDrops.length >= existingDrops.length
+              ? c
+              : { ...c, drops: existingDrops };
+          });
+
+          const merged = campaignMerger.merge(enriched, inv, completedCampaigns, completedGames);
           await storage.set({ campaigns: merged, lastUpdated: new Date().toISOString() });
           sendResponse({ success: true });
         })();
