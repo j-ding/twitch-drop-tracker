@@ -3,9 +3,12 @@
 include:
   - manifest.json
   - background.js
-  - content-main.js
   - content-isolated.js
-  - icons/*
-  - popup/*
+  - content-main.js
+  - i18n.js
+  - fullpage/**/*
+  - icons/**/*
+  - locales/**/*
+  - popup/**/*
 
 exclude: []
