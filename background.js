@@ -720,6 +720,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       return true;
 
+    case 'saveDiagLog':
+      if (request.log) {
+        storage.set({ diagLog: request.log, diagLogDate: new Date().toISOString() })
+          .then(() => sendResponse({ success: true }))
+          .catch(() => sendResponse({ success: false }));
+      } else {
+        sendResponse({ success: true });
+      }
+      return true;
+
+    case 'getDiagLog':
+      storage.get(['diagLog', 'diagLogDate'])
+        .then(({ diagLog, diagLogDate }) => sendResponse({ success: true, log: diagLog || null, date: diagLogDate || null }))
+        .catch(() => sendResponse({ success: false, log: null }));
+      return true;
+
     default:
       return false;
   }

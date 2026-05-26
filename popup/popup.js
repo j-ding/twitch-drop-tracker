@@ -51,6 +51,7 @@ function initButtons() {
     chrome.tabs.create({ url: 'https://www.twitch.tv/drops/inventory' });
   });
   document.getElementById('load-all-drops-btn').addEventListener('click', loadAllDrops);
+  document.getElementById('copy-diag-btn').addEventListener('click', copyDiagLog);
 }
 
 function loadAllDrops() {
@@ -59,6 +60,35 @@ function loadAllDrops() {
   if (hint) {
     hint.classList.remove('hidden');
     setTimeout(() => hint.classList.add('hidden'), 12000);
+  }
+}
+
+async function copyDiagLog() {
+  const btn = document.getElementById('copy-diag-btn');
+  const feedback = document.getElementById('diag-copy-feedback');
+
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getDiagLog' });
+    if (!response?.log) {
+      feedback.textContent = 'No log yet — run a scan first.';
+      feedback.className = 'diag-feedback diag-feedback-warn';
+      setTimeout(() => { feedback.className = 'diag-feedback hidden'; }, 3000);
+      return;
+    }
+
+    await navigator.clipboard.writeText(response.log);
+    btn.textContent = 'Copied!';
+    const date = response.date ? new Date(response.date).toLocaleString() : '';
+    feedback.textContent = date ? `Last scan: ${date}` : 'Copied to clipboard';
+    feedback.className = 'diag-feedback diag-feedback-ok';
+    setTimeout(() => {
+      btn.textContent = 'Copy Log';
+      feedback.className = 'diag-feedback hidden';
+    }, 3000);
+  } catch (e) {
+    feedback.textContent = 'Copy failed — try again.';
+    feedback.className = 'diag-feedback diag-feedback-warn';
+    setTimeout(() => { feedback.className = 'diag-feedback hidden'; }, 3000);
   }
 }
 

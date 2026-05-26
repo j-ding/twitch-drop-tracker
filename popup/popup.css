@@ -664,6 +664,45 @@ body {
   margin-top: 2px;
 }
 
+/* Diagnostic Log */
+.diag-copy-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.diag-copy-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-purple);
+}
+
+.diag-feedback {
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.diag-feedback.hidden {
+  display: none;
+}
+
+.diag-feedback-ok {
+  color: var(--success);
+  background: rgba(0, 200, 83, 0.1);
+}
+
+.diag-feedback-warn {
+  color: var(--warning);
+  background: rgba(255, 171, 0, 0.1);
+}
+
 /* Changelog */
 .changelog {
   margin-top: 12px;

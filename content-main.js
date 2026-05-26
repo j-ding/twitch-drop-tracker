@@ -68,6 +68,34 @@
   };
 
   // ==========================================================================
+  // Diagnostic Log
+  // ==========================================================================
+  const diagLog = {
+    _entries: [],
+    _startTime: 0,
+    start() {
+      this._entries = [];
+      this._startTime = Date.now();
+      this.add('Scan started');
+      this.add(`Browser: ${navigator.userAgent.match(/(Chrome\/[\d.]+)/)?.[1] || 'Unknown'}`);
+      this.add(`URL: ${location.pathname}`);
+    },
+    add(msg) {
+      const elapsed = this._startTime ? ((Date.now() - this._startTime) / 1000).toFixed(2) : '0.00';
+      this._entries.push(`[+${elapsed}s] ${msg}`);
+      log.info(msg);
+    },
+    flush(version) {
+      const header = [
+        `=== Twitch Drops Tracker v${version} Diagnostic Log ===`,
+        `Date: ${new Date().toISOString().replace('T', ' ').slice(0, 19)}`,
+        ''
+      ];
+      return header.concat(this._entries).join('\n');
+    }
+  };
+
+  // ==========================================================================
   // State Management
   // ==========================================================================
   const state = {
@@ -610,12 +638,14 @@
      * Expand all campaigns sequentially
      */
     async expandAll() {
+      diagLog.start();
       showSpeechBubble();
 
       // Check if filtering is active
       const activeGames = getActiveGameCount();
       const filterMsg = activeGames !== null ? ' ' + tNotif('notif_games_selected', {count: activeGames}) : '';
       notification.show(tNotif('notif_keep_focused') + filterMsg, false, true);
+      if (activeGames !== null) diagLog.add(`Filter active: ${activeGames} games selected`);
 
       // Try to keep the tab active by requesting visibility
       this.keepTabActive();
@@ -623,6 +653,7 @@
       // Save original zoom and zoom out to 25% to see more campaigns
       this.originalZoom = document.body.style.zoom || '100%';
       document.body.style.zoom = '25%';
+      diagLog.add('Zoom set to 25%, waiting for page...');
 
       await this.delay(CONFIG.PAGE_LOAD_DELAY);
 
@@ -630,11 +661,14 @@
       let retries = 0;
       while (retries < 10) {
         const testButtons = document.querySelectorAll('[aria-expanded]');
-        if (testButtons.length > 0) break;
-        log.info(`Waiting for page to load... (attempt ${retries + 1})`);
+        if (testButtons.length > 0) {
+          diagLog.add(`Page ready: found ${testButtons.length} [aria-expanded] elements after ${retries} retries`);
+          break;
+        }
         await this.delay(1000);
         retries++;
       }
+      if (retries === 10) diagLog.add('WARNING: Page never loaded [aria-expanded] elements after 10s');
 
       let totalExpanded = 0;
       let skippedFiltered = 0;
@@ -644,7 +678,17 @@
         const allButtons = document.querySelectorAll('[aria-expanded="false"]');
         const validButtons = Array.from(allButtons).filter(b => this.isValidButton(b));
 
-        log.info(`Iteration ${i}: Found ${allButtons.length} collapsed buttons, ${validButtons.length} valid`);
+        if (i === 0) {
+          diagLog.add(`Iteration 0: ${allButtons.length} collapsed elements found, ${validButtons.length} passed isValidButton`);
+          if (allButtons.length > 0 && validButtons.length === 0) {
+            diagLog.add('WARNING: All collapsed elements were filtered by isValidButton — logging first 3:');
+            Array.from(allButtons).slice(0, 3).forEach((b, idx) => {
+              const rect = b.getBoundingClientRect();
+              const zoom = parseFloat(document.body.style.zoom) / 100 || 1;
+              diagLog.add(`  btn[${idx}]: tag=${b.tagName} left=${(rect.left/zoom).toFixed(0)} top=${(rect.top/zoom).toFixed(0)} w=${(rect.width/zoom).toFixed(0)} hasSVG=${!!b.querySelector('svg')} offsetParent=${!!b.offsetParent}`);
+            });
+          }
+        }
 
         let expandedThisRound = 0;
         let hitExpired = false;
@@ -656,9 +700,8 @@
           // Check if this campaign's game is allowed by the filter
           const gameName = findGameNameForButton(btn);
           if (gameName && !isGameAllowed(gameName)) {
-            clickedButtons.add(btnId); // Mark as handled so we don't check again
+            clickedButtons.add(btnId);
             skippedFiltered++;
-            log.info(`Skipping filtered game: ${gameName}`);
             continue;
           }
 
@@ -739,7 +782,14 @@
       }
       const skipMsg = skippedFiltered > 0 ? tNotif('notif_done_skip', {filtered: skippedFiltered}) : '';
 
-      log.info(`Finalize: expanded=${totalExpanded}, skipped=${skippedFiltered}, campaigns=${campaignCount}, details=${detailsCount}, drops=${totalDrops}`);
+      // Log final result and dispatch for storage
+      diagLog.add(`Finalize: campaigns=${campaignCount} expanded=${totalExpanded} skipped=${skippedFiltered} details=${detailsCount} drops=${totalDrops}`);
+      const resultStatus = detailsCount > 0 ? 'SUCCESS' : (totalExpanded === 0 ? 'NO_BUTTONS_CLICKED' : 'DETAILS_NOT_CAPTURED');
+      diagLog.add(`Result: ${resultStatus}`);
+      const version = document.querySelector('meta[name="tdt-version"]')?.content || '1.3.1';
+      window.dispatchEvent(new CustomEvent('twitch-drops-diaglog', {
+        detail: { log: diagLog.flush(version) }
+      }));
 
       if (campaignCount === 0 && totalExpanded === 0) {
         notification.show(tNotif('notif_no_campaigns'), true);
@@ -756,8 +806,6 @@
           window.close();
         }, 3000);
       }
-
-      log.info(`Expanded ${totalExpanded} campaigns, skipped ${skippedFiltered}, captured ${detailsCount} with details`);
     },
 
     /**

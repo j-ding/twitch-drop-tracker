@@ -101,6 +101,16 @@ window.addEventListener('twitch-drops-claimed', (event) => {
   }).catch(() => {});
 });
 
+window.addEventListener('twitch-drops-diaglog', (event) => {
+  const diagLog = event.detail?.log;
+  if (!diagLog) return;
+
+  chrome.runtime.sendMessage({
+    action: 'saveDiagLog',
+    log: diagLog
+  }).catch(() => {});
+});
+
 // =============================================================================
 // Background Script Communication
 // =============================================================================
