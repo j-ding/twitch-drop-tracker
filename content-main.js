@@ -36,7 +36,7 @@
     notif_loading_skip: ', {skipped} skipped',
     notif_no_campaigns: 'No campaigns found. Page may not have loaded properly. Try again.',
     notif_all_skipped: 'Skipped {count} filtered games. No selected games had drop details to load.',
-    notif_no_details: 'Found {count} campaigns but no drop details captured. Try again.',
+    notif_no_details: 'Found {count} campaigns, {expanded} buttons clicked, but no drop details captured. Try again.',
     notif_done: 'Done! Loaded {drops} drops from {campaigns} campaigns{skip}. Closing in 3s...',
     notif_done_skip: ' ({filtered} filtered)',
     bubble_keep_focused: 'Keep This Tab Focused!',
@@ -565,24 +565,27 @@
      * Check if button is a valid campaign expand button
      */
     isValidButton(btn) {
-      if (!btn.offsetParent) return false;
+      // Must be visible (either offsetParent or non-zero bounding rect)
+      const rect = btn.getBoundingClientRect();
+      if (!btn.offsetParent && rect.width === 0) return false;
 
       // Get zoom level for coordinate adjustment
       const zoom = parseFloat(document.body.style.zoom) / 100 || 1;
 
-      const rect = btn.getBoundingClientRect();
-      // Adjust coordinates for zoom level
       const adjustedLeft = rect.left / zoom;
       const adjustedTop = rect.top / zoom;
       const adjustedWindowWidth = window.innerWidth / zoom;
 
-      // Skip header, sidebar, and profile area buttons
+      // Skip header and left sidebar buttons
       if (adjustedTop < CONFIG.HEADER_HEIGHT) return false;
       if (adjustedLeft < CONFIG.SIDEBAR_WIDTH) return false;
-      if (adjustedLeft > adjustedWindowWidth - CONFIG.SIDEBAR_WIDTH) return false;
+      // Note: no right-side filter — the expand chevron IS at the far right of each row
 
-      // Must have SVG chevron icon
-      return !!btn.querySelector('svg');
+      // Accept if it has an SVG, an img, or is icon-sized (chevron may be CSS-only)
+      const logicalWidth = rect.width / zoom;
+      return !!btn.querySelector('svg') ||
+             !!btn.querySelector('img') ||
+             (logicalWidth > 0 && logicalWidth <= 80);
     },
 
     /**
@@ -626,7 +629,7 @@
       // Wait for page content to load
       let retries = 0;
       while (retries < 10) {
-        const testButtons = document.querySelectorAll('button[aria-expanded]');
+        const testButtons = document.querySelectorAll('[aria-expanded]');
         if (testButtons.length > 0) break;
         log.info(`Waiting for page to load... (attempt ${retries + 1})`);
         await this.delay(1000);
@@ -638,7 +641,7 @@
       const clickedButtons = new Set();
 
       for (let i = 0; i < CONFIG.MAX_ITERATIONS; i++) {
-        const allButtons = document.querySelectorAll('button[aria-expanded="false"]');
+        const allButtons = document.querySelectorAll('[aria-expanded="false"]');
         const validButtons = Array.from(allButtons).filter(b => this.isValidButton(b));
 
         log.info(`Iteration ${i}: Found ${allButtons.length} collapsed buttons, ${validButtons.length} valid`);
@@ -692,7 +695,7 @@
           window.scrollBy(0, CONFIG.SCROLL_AMOUNT);
           await this.delay(CONFIG.SCROLL_DELAY);
 
-          const newButtons = document.querySelectorAll('button[aria-expanded="false"]');
+          const newButtons = document.querySelectorAll('[aria-expanded="false"]');
           const hasNew = Array.from(newButtons)
             .filter(b => this.isValidButton(b))
             .some(b => !clickedButtons.has(this.getButtonId(b, newButtons)));
@@ -744,7 +747,7 @@
         if (skippedFiltered > 0) {
           notification.show(tNotif('notif_all_skipped', {count: skippedFiltered}), false);
         } else {
-          notification.show(tNotif('notif_no_details', {count: campaignCount}), true);
+          notification.show(tNotif('notif_no_details', {count: campaignCount, expanded: totalExpanded}), true);
         }
       } else {
         notification.show(tNotif('notif_done', {drops: totalDrops, campaigns: detailsCount, skip: skipMsg}));
