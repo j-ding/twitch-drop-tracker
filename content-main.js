@@ -593,27 +593,28 @@
      * Check if button is a valid campaign expand button
      */
     isValidButton(btn) {
-      // Must be visible (either offsetParent or non-zero bounding rect)
       const rect = btn.getBoundingClientRect();
-      if (!btn.offsetParent && rect.width === 0) return false;
+      // Skip truly invisible buttons
+      if (rect.width === 0 && rect.height === 0) return false;
 
-      // Get zoom level for coordinate adjustment
       const zoom = parseFloat(document.body.style.zoom) / 100 || 1;
-
       const adjustedLeft = rect.left / zoom;
-      const adjustedTop = rect.top / zoom;
-      const adjustedWindowWidth = window.innerWidth / zoom;
 
-      // Skip header and left sidebar buttons
-      if (adjustedTop < CONFIG.HEADER_HEIGHT) return false;
-      if (adjustedLeft < CONFIG.SIDEBAR_WIDTH) return false;
-      // Note: no right-side filter — the expand chevron IS at the far right of each row
+      // Skip elements placed far off-screen (hidden accessibility/skip-link buttons)
+      if (adjustedLeft < -500) return false;
 
-      // Accept if it has an SVG, an img, or is icon-sized (chevron may be CSS-only)
+      // Skip buttons inside semantic navigation — these are header/nav controls,
+      // not campaign expand buttons
+      if (btn.closest('header, nav, [role="navigation"], [role="banner"]')) return false;
+
+      // Must be icon-sized — campaign expand chevrons are always small buttons
       const logicalWidth = rect.width / zoom;
+      if (logicalWidth === 0 || logicalWidth > 100) return false;
+
+      // Accept if it has an SVG, an img, or is small enough to be a chevron
       return !!btn.querySelector('svg') ||
              !!btn.querySelector('img') ||
-             (logicalWidth > 0 && logicalWidth <= 80);
+             logicalWidth <= 80;
     },
 
     /**
@@ -639,6 +640,7 @@
      */
     async expandAll() {
       diagLog.start();
+      diagLog.add(`Screen: ${window.screen.width}x${window.screen.height} devicePixelRatio=${window.devicePixelRatio}`);
       showSpeechBubble();
 
       // Check if filtering is active
@@ -679,13 +681,17 @@
         const validButtons = Array.from(allButtons).filter(b => this.isValidButton(b));
 
         if (i === 0) {
+          const zoom = parseFloat(document.body.style.zoom) / 100 || 1;
+          diagLog.add(`Zoom: body.style.zoom="${document.body.style.zoom}" → factor=${zoom}`);
           diagLog.add(`Iteration 0: ${allButtons.length} collapsed elements found, ${validButtons.length} passed isValidButton`);
           if (allButtons.length > 0 && validButtons.length === 0) {
-            diagLog.add('WARNING: All collapsed elements were filtered by isValidButton — logging first 3:');
-            Array.from(allButtons).slice(0, 3).forEach((b, idx) => {
+            diagLog.add('WARNING: All collapsed elements were filtered — logging first 5:');
+            Array.from(allButtons).slice(0, 5).forEach((b, idx) => {
               const rect = b.getBoundingClientRect();
-              const zoom = parseFloat(document.body.style.zoom) / 100 || 1;
-              diagLog.add(`  btn[${idx}]: tag=${b.tagName} left=${(rect.left/zoom).toFixed(0)} top=${(rect.top/zoom).toFixed(0)} w=${(rect.width/zoom).toFixed(0)} hasSVG=${!!b.querySelector('svg')} offsetParent=${!!b.offsetParent}`);
+              const inHeader = !!b.closest('header, nav, [role="navigation"], [role="banner"]');
+              const ariaControls = b.getAttribute('aria-controls') || '';
+              const nearestSemantic = b.closest('header, nav, main, section, article, aside')?.tagName || 'none';
+              diagLog.add(`  btn[${idx}]: tag=${b.tagName} left=${(rect.left/zoom).toFixed(0)} top=${(rect.top/zoom).toFixed(0)} w=${(rect.width/zoom).toFixed(0)} h=${(rect.height/zoom).toFixed(0)} hasSVG=${!!b.querySelector('svg')} inHeader=${inHeader} nearestSemantic=${nearestSemantic} aria-controls="${ariaControls}"`);
             });
           }
         }
