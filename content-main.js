@@ -594,27 +594,16 @@
      */
     isValidButton(btn) {
       const rect = btn.getBoundingClientRect();
-      // Skip truly invisible buttons
+      // Skip invisible buttons
       if (rect.width === 0 && rect.height === 0) return false;
-
+      // Skip off-screen accessibility/skip-link buttons
       const zoom = parseFloat(document.body.style.zoom) / 100 || 1;
-      const adjustedLeft = rect.left / zoom;
-
-      // Skip elements placed far off-screen (hidden accessibility/skip-link buttons)
-      if (adjustedLeft < -500) return false;
-
-      // Skip buttons inside semantic navigation — these are header/nav controls,
-      // not campaign expand buttons
+      if (rect.left / zoom < -500) return false;
+      // Skip buttons inside semantic nav elements (header dropdowns, side nav)
       if (btn.closest('header, nav, [role="navigation"], [role="banner"]')) return false;
-
-      // Must be icon-sized — campaign expand chevrons are always small buttons
-      const logicalWidth = rect.width / zoom;
-      if (logicalWidth === 0 || logicalWidth > 100) return false;
-
-      // Accept if it has an SVG, an img, or is small enough to be a chevron
-      return !!btn.querySelector('svg') ||
-             !!btn.querySelector('img') ||
-             logicalWidth <= 80;
+      // Everything else is a candidate — Twitch renders campaign expand buttons as
+      // full-width row buttons (~1400px), not small chevron icons, so no size filter
+      return true;
     },
 
     /**
