@@ -609,11 +609,14 @@
     /**
      * Get stable button identifier
      */
-    getButtonId(btn, allButtons) {
-      const parent = btn.closest('[class*="Layout"]') || btn.parentElement;
-      return parent?.getAttribute('data-test-selector') ||
-             btn.getAttribute('aria-controls') ||
-             `btn_${Array.from(allButtons).indexOf(btn)}`;
+    getButtonId(btn) {
+      // aria-controls is the most stable ID when present
+      const controls = btn.getAttribute('aria-controls');
+      if (controls) return controls;
+      // Use document-order index among ALL [aria-expanded] elements (true AND false).
+      // Unlike a query for only [aria-expanded="false"], this set never shrinks as
+      // buttons get expanded, so indices stay stable across iterations.
+      return `dom_${Array.from(document.querySelectorAll('[aria-expanded]')).indexOf(btn)}`;
     },
 
     /**
@@ -689,7 +692,7 @@
         let hitExpired = false;
 
         for (const btn of validButtons) {
-          const btnId = this.getButtonId(btn, allButtons);
+          const btnId = this.getButtonId(btn);
           if (clickedButtons.has(btnId)) continue;
 
           // Check if this campaign's game is allowed by the filter
@@ -736,7 +739,7 @@
           const newButtons = document.querySelectorAll('[aria-expanded="false"]');
           const hasNew = Array.from(newButtons)
             .filter(b => this.isValidButton(b))
-            .some(b => !clickedButtons.has(this.getButtonId(b, newButtons)));
+            .some(b => !clickedButtons.has(this.getButtonId(b)));
 
           if (!hasNew) break;
         }
@@ -781,7 +784,7 @@
       diagLog.add(`Finalize: campaigns=${campaignCount} expanded=${totalExpanded} skipped=${skippedFiltered} details=${detailsCount} drops=${totalDrops}`);
       const resultStatus = detailsCount > 0 ? 'SUCCESS' : (totalExpanded === 0 ? 'NO_BUTTONS_CLICKED' : 'DETAILS_NOT_CAPTURED');
       diagLog.add(`Result: ${resultStatus}`);
-      const version = document.querySelector('meta[name="tdt-version"]')?.content || '1.3.1';
+      const version = '1.3.3';
       window.dispatchEvent(new CustomEvent('twitch-drops-diaglog', {
         detail: { log: diagLog.flush(version) }
       }));
