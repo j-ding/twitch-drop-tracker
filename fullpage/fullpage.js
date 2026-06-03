@@ -18,6 +18,7 @@ let gameFilter = { enabled: false, games: {}, hideFiltered: false };
 let allCampaigns = [];
 let searchQuery = '';
 let filterSearchQuery = '';
+let collapsedSections = new Set(JSON.parse(localStorage.getItem('tdt_collapsed_sections') || '[]'));
 
 // =============================================================================
 // Initialization
@@ -389,29 +390,31 @@ function renderCampaigns(campaigns) {
   };
 
   let html = '';
-  if (groups.today.length) {
-    html += `<div class="section-header danger">${t('section_expiring_today')}</div>`;
-    html += sortWithFilter(groups.today).map(c => renderCampaignCard(c, 'today')).join('');
-  }
-  if (groups.tomorrow.length) {
-    html += `<div class="section-header orange">${t('section_tomorrow')}</div>`;
-    html += sortWithFilter(groups.tomorrow).map(c => renderCampaignCard(c, 'tomorrow')).join('');
-  }
-  if (groups.soon.length) {
-    html += `<div class="section-header warning">${t('section_2_3_days')}</div>`;
-    html += sortWithFilter(groups.soon).map(c => renderCampaignCard(c, 'soon')).join('');
-  }
-  if (groups.week.length) {
-    html += `<div class="section-header soon">${t('section_this_week')}</div>`;
-    html += sortWithFilter(groups.week).map(c => renderCampaignCard(c, 'week')).join('');
-  }
-  if (groups.later.length) {
-    html += `<div class="section-header">${t('section_later')}</div>`;
-    html += sortWithFilter(groups.later).map(c => renderCampaignCard(c, 'later')).join('');
-  }
+  html += renderSection('today',    t('section_expiring_today'), sortWithFilter(groups.today).map(c => renderCampaignCard(c, 'today')).join(''),    'danger');
+  html += renderSection('tomorrow', t('section_tomorrow'),       sortWithFilter(groups.tomorrow).map(c => renderCampaignCard(c, 'tomorrow')).join(''), 'orange');
+  html += renderSection('soon',     t('section_2_3_days'),       sortWithFilter(groups.soon).map(c => renderCampaignCard(c, 'soon')).join(''),       'warning');
+  html += renderSection('week',     t('section_this_week'),      sortWithFilter(groups.week).map(c => renderCampaignCard(c, 'week')).join(''),       'soon');
+  html += renderSection('later',    t('section_later'),          sortWithFilter(groups.later).map(c => renderCampaignCard(c, 'later')).join(''));
 
   container.innerHTML = html;
   attachCardListeners(container);
+
+  container.querySelectorAll('.section-group').forEach(group => {
+    group.querySelector('.section-header').addEventListener('click', () => {
+      const key = group.dataset.section;
+      group.classList.toggle('collapsed');
+      collapsedSections[group.classList.contains('collapsed') ? 'add' : 'delete'](key);
+      localStorage.setItem('tdt_collapsed_sections', JSON.stringify([...collapsedSections]));
+    });
+  });
+}
+
+const SECTION_CHEVRON = `<svg class="section-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+
+function renderSection(key, label, cardsHtml, colorClass = '') {
+  if (!cardsHtml) return '';
+  const collapsed = collapsedSections.has(key);
+  return `<div class="section-group${collapsed ? ' collapsed' : ''}" data-section="${key}"><div class="section-header ${colorClass} collapsible">${label}${SECTION_CHEVRON}</div><div class="section-body">${cardsHtml}</div></div>`;
 }
 
 function renderCampaignCard(campaign, urgency) {

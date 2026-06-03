@@ -171,20 +171,32 @@ body {
   color: var(--text-muted);
 }
 
-.section-header.danger {
-  color: var(--danger);
+.section-header.danger  { color: var(--danger); }
+.section-header.orange  { color: var(--orange); }
+.section-header.warning { color: var(--warning); }
+.section-header.soon    { color: var(--blue-light); }
+
+.section-group.collapsed .section-body {
+  display: none;
 }
 
-.section-header.orange {
-  color: var(--orange);
+.section-header.collapsible {
+  cursor: pointer;
+  user-select: none;
 }
 
-.section-header.warning {
-  color: var(--warning);
+.section-header.collapsible:hover {
+  opacity: 0.8;
 }
 
-.section-header.soon {
-  color: var(--blue-light);
+.section-chevron {
+  margin-left: auto;
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+}
+
+.section-group.collapsed .section-chevron {
+  transform: rotate(-90deg);
 }
 
 /* Campaign Card */
