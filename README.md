@@ -1,4 +1,4 @@
-# Twitch Drops Tracker
+# Twitch Drop Tracker
 
 A Chrome extension to track your Twitch drops campaigns and progress, sorted by expiration date.
 

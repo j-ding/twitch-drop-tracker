@@ -331,12 +331,63 @@ body {
   margin-bottom: 6px;
 }
 
+.drop-image-wrap {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
 .drop-image {
   width: 32px;
   height: 32px;
   border-radius: 4px;
   object-fit: cover;
+}
+
+.drop-type-overlay {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--bg-primary);
+  pointer-events: none;
+}
+
+.drop-type-overlay.watch {
+  background: #1a3a4a;
+  color: var(--blue-light);
+}
+
+.drop-type-overlay.sub {
+  background: #3a2e0a;
+  color: var(--warning);
+}
+
+.drop-type-overlay svg {
+  width: 8px;
+  height: 8px;
+}
+
+.sub-req {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sub-req svg {
+  color: var(--warning);
   flex-shrink: 0;
+  width: 9px;
+  height: 9px;
 }
 
 .drop-name {

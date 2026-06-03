@@ -1,10 +1,10 @@
-# Privacy Policy for Twitch Drops Tracker
+# Privacy Policy for Twitch Drop Tracker
 
 **Last updated:** December 5, 2025
 
 ## Overview
 
-Twitch Drops Tracker is a browser extension that helps you track your Twitch drops campaigns and progress. Your privacy is important to us, and this extension is designed with privacy in mind.
+Twitch Drop Tracker is a browser extension that helps you track your Twitch drops campaigns and progress. Your privacy is important to us, and this extension is designed with privacy in mind.
 
 ## Data Collection
 

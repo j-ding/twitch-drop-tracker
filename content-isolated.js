@@ -1,5 +1,5 @@
 /**
- * Twitch Drops Tracker - Isolated World Content Script
+ * Twitch Drop Tracker - Isolated World Content Script
  * Bridges communication between main world and background script
  */
 
@@ -60,9 +60,11 @@ function transformCampaigns(rawCampaigns) {
         name: drop.benefitEdges?.[0]?.benefit?.name || drop.name,
         imageUrl: drop.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
         requiredMinutes: drop.requiredMinutesWatched,
+        requiredSubs: drop.requiredSubs || 0,
         startAt: drop.startAt,
         endAt: drop.endAt,
         progressMinutes: drop.self?.currentMinutesWatched || 0,
+        dropType: drop.dropType || (drop.requiredSubs > 0 ? 'sub' : 'watch'),
         status: drop.self?.isClaimed ? 'claimed' :
                 (drop.self?.currentMinutesWatched >= drop.requiredMinutesWatched) ? 'claimable' :
                 (drop.self?.currentMinutesWatched > 0 || drop.self?.hasPreconditionsMet) ? 'in_progress' :

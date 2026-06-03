@@ -1,5 +1,5 @@
 /**
- * Twitch Drops Tracker - Full Page Script
+ * Twitch Drop Tracker - Full Page Script
  * Enhanced version with glassmorphism UI
  */
 
@@ -463,7 +463,20 @@ function renderCampaignCard(campaign, urgency) {
   `;
 }
 
+const DROP_ICON_EYE = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const DROP_ICON_STAR = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+const DROP_ICON_STAR_REQ = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+
+function dropImageHtml(drop) {
+  if (!drop.imageUrl) return '';
+  const img = `<img class="drop-image" src="${drop.imageUrl}" alt="" onerror="this.style.display='none'">`;
+  if (!drop.dropType) return img;
+  const isSub = drop.dropType === 'sub';
+  return `<div class="drop-image-wrap">${img}<div class="drop-type-overlay ${isSub ? 'sub' : 'watch'}" title="${isSub ? 'Subscribe to Redeem' : 'Watch to Redeem'}">${isSub ? DROP_ICON_STAR : DROP_ICON_EYE}</div></div>`;
+}
+
 function renderDropItem(drop) {
+  const isSub = drop.dropType === 'sub';
   const progress = drop.progressMinutes || 0;
   const required = drop.requiredMinutes || 60;
   // Force 100% for claimed/claimable drops to handle cases where progress data hasn't updated
@@ -477,13 +490,15 @@ function renderDropItem(drop) {
     in_progress: { class: 'in-progress', text: t('status_time', {progress, required}) }
   };
 
-  const status = statusMap[drop.status] || { class: 'locked', text: t('status_locked', {required}) };
-  const showProgress = drop.status === 'in_progress' || drop.status === 'claimable' || progress > 0;
+  const lockedText = isSub ? t('status_sub_locked') : t('status_locked', {required});
+  const status = statusMap[drop.status] || { class: 'locked', text: lockedText };
+  const showProgress = !isSub && (drop.status === 'in_progress' || drop.status === 'claimable' || progress > 0);
+  const showSubReq = isSub && drop.status !== 'claimed' && drop.requiredSubs;
 
   return `
     <div class="drop-item">
       <div class="drop-header">
-        ${drop.imageUrl ? `<img class="drop-image" src="${drop.imageUrl}" alt="" onerror="this.style.display='none'">` : ''}
+        ${dropImageHtml(drop)}
         <span class="drop-name">${escapeHtml(drop.name || t('unknown_drop'))}</span>
         <span class="drop-status ${status.class}">${status.text}</span>
       </div>
@@ -494,6 +509,9 @@ function renderDropItem(drop) {
           </div>
           <span class="progress-text">${percentage}%</span>
         </div>
+      ` : ''}
+      ${showSubReq ? `
+        <div class="sub-req">${DROP_ICON_STAR_REQ}${t('sub_drop_req', {count: drop.requiredSubs})}</div>
       ` : ''}
     </div>
   `;
@@ -592,15 +610,17 @@ function renderProgressCampaignCard(campaign) {
   const hasLockedDrops = drops.some(d => d.status === 'locked');
   const likelyIncomplete = drops.length <= inProgressCount + claimedCount && !hasLockedDrops && drops.length < 3;
 
-  const totalProgress = drops.reduce((sum, d) => {
+  const watchDrops = drops.filter(d => d.dropType !== 'sub');
+  const totalProgress = watchDrops.reduce((sum, d) => {
     const progress = d.progressMinutes || 0;
     const required = d.requiredMinutes || 60;
     return sum + Math.min(progress, required);
   }, 0);
-  const totalRequired = drops.reduce((sum, d) => sum + (d.requiredMinutes || 60), 0);
-  const overallPercent = Math.min(100, Math.round((totalProgress / totalRequired) * 100));
+  const totalRequired = watchDrops.reduce((sum, d) => sum + (d.requiredMinutes || 60), 0);
+  const overallPercent = totalRequired > 0 ? Math.min(100, Math.round((totalProgress / totalRequired) * 100)) : 0;
 
   const dropsHtml = drops.map(drop => {
+    const isSub = drop.dropType === 'sub';
     const progress = drop.progressMinutes || 0;
     const required = drop.requiredMinutes || 60;
     // Force 100% for claimed/claimable drops
@@ -613,13 +633,15 @@ function renderProgressCampaignCard(campaign) {
       claimable: { class: 'claimable', text: t('status_ready') },
       in_progress: { class: 'in-progress', text: t('status_time', {progress, required}) }
     };
-    const status = statusMap[drop.status] || { class: 'locked', text: t('status_locked', {required}) };
-    const showProgress = drop.status === 'in_progress' || drop.status === 'claimable' || (progress > 0 && drop.status !== 'claimed');
+    const lockedText = isSub ? t('status_sub_locked') : t('status_locked', {required});
+    const status = statusMap[drop.status] || { class: 'locked', text: lockedText };
+    const showProgress = !isSub && (drop.status === 'in_progress' || drop.status === 'claimable' || (progress > 0 && drop.status !== 'claimed'));
+    const showSubReq = isSub && drop.status !== 'claimed' && drop.requiredSubs;
 
     return `
       <div class="drop-item">
         <div class="drop-header">
-          ${drop.imageUrl ? `<img class="drop-image" src="${drop.imageUrl}" alt="" onerror="this.style.display='none'">` : ''}
+          ${dropImageHtml(drop)}
           <span class="drop-name">${escapeHtml(drop.name || t('unknown_drop'))}</span>
           <span class="drop-status ${status.class}">${status.text}</span>
         </div>
@@ -628,6 +650,9 @@ function renderProgressCampaignCard(campaign) {
             <div class="progress-bar"><div class="progress-fill ${percentage >= 100 ? 'complete' : ''}" style="width: ${percentage}%"></div></div>
             <span class="progress-text">${drop.status === 'in_progress' ? t('time_min_left', {minutes: Math.max(0, required - progress)}) : `${percentage}%`}</span>
           </div>
+        ` : ''}
+        ${showSubReq ? `
+          <div class="sub-req">${DROP_ICON_STAR_REQ}${t('sub_drop_req', {count: drop.requiredSubs})}</div>
         ` : ''}
       </div>
     `;
@@ -703,11 +728,12 @@ function gameNameToSlug(gameName) {
   // Special case mappings for games with non-standard slugs
   const specialCases = {
     'overwatch 2': 'overwatch-2',
-    'overwatch': 'overwatch-2',  // In case it's stored without the "2"
+    'overwatch': 'overwatch-2',
     'counter-strike 2': 'counter-strike-2',
     'counter-strike': 'counter-strike-2',
     'pubg: battlegrounds': 'pubg-battlegrounds',
-    'playerunknowns battlegrounds': 'pubg-battlegrounds'
+    'playerunknowns battlegrounds': 'pubg-battlegrounds',
+    'bitcraft online': 'bitcraft'
   };
 
   const normalized = gameName.toLowerCase().trim();

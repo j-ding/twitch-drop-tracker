@@ -35,6 +35,8 @@
   "status_ready": "Ready!",
   "status_time": "{progress}/{required} min",
   "status_locked": "{required} min",
+  "status_sub_locked": "Subscribe",
+  "sub_drop_req": "Gift {count} subscriptions",
   "updates_off": "Updates off",
   "drops_not_loaded_1": "Drop details not loaded yet.",
   "drops_not_loaded_2": "Use Load All Drop Details below.",

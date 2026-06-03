@@ -1,5 +1,5 @@
 /**
- * Twitch Drops Tracker - Main World Content Script
+ * Twitch Drop Tracker - Main World Content Script
  * Runs in page context to intercept fetch requests
  */
 (function() {
@@ -87,7 +87,7 @@
     },
     flush(version) {
       const header = [
-        `=== Twitch Drops Tracker v${version} Diagnostic Log ===`,
+        `=== Twitch Drop Tracker v${version} Diagnostic Log ===`,
         `Date: ${new Date().toISOString().replace('T', ' ').slice(0, 19)}`,
         ''
       ];
@@ -189,7 +189,7 @@
         for (const drop of obj.timeBasedDrops) {
           if (drop?.id && !seenIds.has(drop.id)) {
             seenIds.add(drop.id);
-            drops.push(drop);
+            drops.push({ ...drop, dropType: drop.requiredSubs > 0 ? 'sub' : 'watch' });
           }
         }
       }
@@ -502,7 +502,7 @@
         "></div>
 
         <div style="font-size: 60px; margin-bottom: 16px; display: block; animation: _tdt_icon_bounce 1.6s ease-in-out 0.6s infinite; line-height: 1;">🎁</div>
-        <div style="color: #9147ff; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 14px;">Twitch Drops Tracker</div>
+        <div style="color: #9147ff; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 14px;">Twitch Drop Tracker</div>
         <div style="color: #efeff1; font-weight: 700; font-size: 28px; line-height: 1.2; margin-bottom: 12px;">${title}</div>
         <div style="color: #adadb8; font-size: 17px; line-height: 1.55;">${sub}</div>
       </div>

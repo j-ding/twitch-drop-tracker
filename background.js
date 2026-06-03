@@ -1,5 +1,5 @@
 /**
- * Twitch Drops Tracker - Background Service Worker
+ * Twitch Drop Tracker - Background Service Worker
  * Handles data fetching, storage, and message routing
  */
 
@@ -105,7 +105,7 @@ const dataFetcher = {
               game { id displayName boxArtURL }
               status startAt endAt
               timeBasedDrops {
-                id name requiredMinutesWatched
+                id name requiredMinutesWatched requiredSubs
                 self { currentMinutesWatched dropInstanceID isClaimed hasPreconditionsMet }
                 benefitEdges { benefit { id name imageAssetURL } }
               }
@@ -153,8 +153,10 @@ const dataFetcher = {
           name: drop.benefitEdges?.[0]?.benefit?.name || drop.name,
           dropImageUrl: drop.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
           requiredMinutes: drop.requiredMinutesWatched,
+          requiredSubs: drop.requiredSubs || 0,
           progressMinutes: self.currentMinutesWatched || 0,
-          hasPreconditionsMet: self.hasPreconditionsMet
+          hasPreconditionsMet: self.hasPreconditionsMet,
+          dropType: drop.requiredSubs > 0 ? 'sub' : 'watch'
         };
 
         if (self.isClaimed) {
@@ -168,6 +170,7 @@ const dataFetcher = {
           result.inProgress.push(dropInfo);
         }
       }
+
     }
 
     return result;
@@ -187,7 +190,7 @@ const dataFetcher = {
           game { id displayName boxArtURL }
           self { isAccountConnected }
           timeBasedDrops {
-            id name startAt endAt requiredMinutesWatched
+            id name startAt endAt requiredMinutesWatched requiredSubs
             benefitEdges { benefit { id name imageAssetURL } }
           }
         }
@@ -215,10 +218,12 @@ const dataFetcher = {
             name: d.benefitEdges?.[0]?.benefit?.name || d.name,
             imageUrl: d.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
             requiredMinutes: d.requiredMinutesWatched,
+            requiredSubs: d.requiredSubs || 0,
             startAt: d.startAt,
             endAt: d.endAt,
             progressMinutes: 0,
-            status: 'locked'
+            status: 'locked',
+            dropType: d.requiredSubs > 0 ? 'sub' : 'watch'
           }))
         }));
     } catch (error) {
@@ -375,19 +380,19 @@ const campaignMerger = {
       const drops = (campaign.timeBasedDrops || []).map(drop => {
         const progress = progressMap.get(drop.id) || { progressMinutes: 0, status: 'locked' };
         const dropName = drop.benefitEdges?.[0]?.benefit?.name || drop.name;
-        // Check if drop was claimed within this campaign's date range
         const claimedByName = this.isDropClaimedForCampaign(
           dropName, claimedDropsMap, campaign.startAt, campaign.endAt
         );
-
         return {
           id: drop.id,
           name: dropName,
           imageUrl: drop.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
           requiredMinutes: drop.requiredMinutesWatched,
+          requiredSubs: drop.requiredSubs || 0,
           progressMinutes: claimedByName ? drop.requiredMinutesWatched : progress.progressMinutes,
           status: claimedByName ? 'claimed' : progress.status,
-          claimedByNameMatch: claimedByName
+          claimedByNameMatch: claimedByName,
+          dropType: drop.requiredSubs > 0 ? 'sub' : 'watch'
         };
       });
 
@@ -579,6 +584,7 @@ const backgroundScraper = {
               startAt
               endAt
               requiredMinutesWatched
+              requiredSubs
               self {
                 currentMinutesWatched
                 dropInstanceID
@@ -610,6 +616,7 @@ const backgroundScraper = {
             startAt
             endAt
             requiredMinutesWatched
+            requiredSubs
             self {
               currentMinutesWatched
               dropInstanceID
@@ -650,9 +657,11 @@ const backgroundScraper = {
           name: d.benefitEdges?.[0]?.benefit?.name || d.name,
           imageUrl: d.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
           requiredMinutes: d.requiredMinutesWatched,
+          requiredSubs: d.requiredSubs || 0,
           startAt: d.startAt,
           endAt: d.endAt,
           progressMinutes: d.self?.currentMinutesWatched || 0,
+          dropType: d.requiredSubs > 0 ? 'sub' : 'watch',
           status: d.self?.isClaimed ? 'claimed' :
                   (d.self?.currentMinutesWatched >= d.requiredMinutesWatched) ? 'claimable' :
                   (d.self?.currentMinutesWatched > 0 || d.self?.hasPreconditionsMet) ? 'in_progress' :

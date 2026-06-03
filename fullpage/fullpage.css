@@ -577,12 +577,63 @@ body {
   margin-bottom: 8px;
 }
 
+.drop-image-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
 .drop-image {
   width: 40px;
   height: 40px;
   border-radius: 8px;
   object-fit: cover;
+}
+
+.drop-type-overlay {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--bg-primary);
+  pointer-events: none;
+}
+
+.drop-type-overlay.watch {
+  background: #1a3a4a;
+  color: var(--blue-light);
+}
+
+.drop-type-overlay.sub {
+  background: #3a2e0a;
+  color: var(--warning);
+}
+
+.drop-type-overlay svg {
+  width: 9px;
+  height: 9px;
+}
+
+.sub-req {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sub-req svg {
+  color: var(--warning);
   flex-shrink: 0;
+  width: 10px;
+  height: 10px;
 }
 
 .drop-name {
