@@ -187,7 +187,7 @@ const dataFetcher = {
         dropCampaigns(status: ACTIVE) {
           id name status startAt endAt detailsURL accountLinkURL
           owner { id name }
-          game { id displayName boxArtURL slug }
+          game { id displayName boxArtURL }
           self { isAccountConnected }
           timeBasedDrops {
             id name startAt endAt requiredMinutesWatched requiredSubs
@@ -578,7 +578,7 @@ const backgroundScraper = {
             detailsURL
             accountLinkURL
             owner { id name }
-            game { id displayName boxArtURL slug }
+            game { id displayName boxArtURL }
             self { isAccountConnected }
             timeBasedDrops {
               id
@@ -701,18 +701,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const { inventory, campaigns: storedCampaigns = [] } = await storage.get(['inventory', 'campaigns']);
           const inv = inventory || { inProgress: [], claimable: [], claimed: [], gameEventDrops: [] };
 
-          // Preserve existing drop data: merge incoming drops with whatever is
-          // already stored per campaign, keeping the richer version of each
-          // drop ID (by name/image completeness). A same-count-but-shallower
-          // incoming batch — e.g. a large multi-channel campaign where some
-          // drops loaded without benefit info this time — no longer silently
-          // overwrites previously-good data the way a plain length check did.
+          // Preserve existing drop data: if an incoming campaign has fewer drops
+          // than what's already stored (e.g. a failed scan sent empty drops),
+          // keep the richer stored version so My Progress stays accurate.
           const storedDropsById = new Map(storedCampaigns.map(c => [c.id, c.drops || []]));
           const enriched = request.campaigns.map(c => {
             const existingDrops = storedDropsById.get(c.id) || [];
             const incomingDrops = c.drops || [];
-            if (existingDrops.length === 0) return c;
-            return { ...c, drops: campaignMerger.deduplicateDrops([...existingDrops, ...incomingDrops]) };
+            return incomingDrops.length >= existingDrops.length
+              ? c
+              : { ...c, drops: existingDrops };
           });
 
           const merged = campaignMerger.merge(enriched, inv, completedCampaigns, completedGames);

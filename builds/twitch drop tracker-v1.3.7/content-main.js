@@ -103,10 +103,6 @@
     set campaigns(val) { window.__twitchDropsCampaigns = val; },
     get details() { return window.__twitchDropDetails || {}; },
     set details(val) { window.__twitchDropDetails = val; },
-    // Campaign-level metadata (e.g. channel restrictions) not carried by
-    // state.details, which only holds each campaign's drops array
-    get campaignMeta() { return window.__twitchDropsCampaignMeta || {}; },
-    set campaignMeta(val) { window.__twitchDropsCampaignMeta = val; },
     get claimedDrops() { return window.__twitchClaimedDrops || []; },
     set claimedDrops(val) { window.__twitchClaimedDrops = val; },
     // Track last API response time for smart waiting
@@ -117,7 +113,6 @@
   // Initialize state
   window.__twitchDropsCampaigns = window.__twitchDropsCampaigns || [];
   window.__twitchDropDetails = window.__twitchDropDetails || {};
-  window.__twitchDropsCampaignMeta = window.__twitchDropsCampaignMeta || {};
   window.__twitchClaimedDrops = window.__twitchClaimedDrops || [];
 
   // ==========================================================================
@@ -142,8 +137,7 @@
   function doDispatchCampaigns() {
     const merged = state.campaigns.map(campaign => ({
       ...campaign,
-      timeBasedDrops: state.details[campaign.id] || campaign.timeBasedDrops,
-      allow: state.campaignMeta[campaign.id]?.allow || campaign.allow
+      timeBasedDrops: state.details[campaign.id] || campaign.timeBasedDrops
     }));
 
     if (merged.length > 0) {
@@ -159,53 +153,6 @@
         detail: { claimedDrops: state.claimedDrops }
       }));
     }
-  }
-
-  // ==========================================================================
-  // Drop Merging
-  // ==========================================================================
-  // Large, multi-channel campaigns (e.g. restricted to specific streamers)
-  // surface the same drop ID across several differently-shaped GQL responses
-  // as the page loads — some carry full benefit info (name/image), others are
-  // shallow previews. Whichever response reaches state.details FIRST used to
-  // win permanently; score by completeness instead so a fuller response can
-  // always upgrade an already-cached shallow entry.
-  function dropRichness(drop) {
-    const benefit = drop?.benefitEdges?.[0]?.benefit;
-    return (benefit?.name ? 1 : 0) + (benefit?.imageAssetURL ? 1 : 0);
-  }
-
-  function mergeDropArrays(existing, incoming) {
-    const map = new Map(existing.map(d => [d.id, d]));
-    let changed = false;
-    for (const drop of incoming) {
-      if (!drop?.id) continue;
-      const current = map.get(drop.id);
-      if (!current) {
-        map.set(drop.id, drop);
-        changed = true;
-      } else if (dropRichness(drop) > dropRichness(current)) {
-        map.set(drop.id, drop);
-        changed = true;
-      }
-    }
-    return { drops: Array.from(map.values()), changed };
-  }
-
-  // Channel-restricted campaigns/drops surface their allowed channel list
-  // under one of a few plausible field names. Not hard-coded to any one
-  // game/campaign — checked wherever a campaign- or drop-shaped object shows
-  // up, so a future campaign using a different field name here still works.
-  function findChannelRestriction(obj) {
-    if (!obj || typeof obj !== 'object') return null;
-    const candidates = [obj.allow, obj.channelRestriction, obj];
-    for (const c of candidates) {
-      if (Array.isArray(c?.channels) && c.channels.length > 0) return c;
-    }
-    if (Array.isArray(obj.restrictedChannels) && obj.restrictedChannels.length > 0) {
-      return { channels: obj.restrictedChannels };
-    }
-    return null;
   }
 
   // ==========================================================================
@@ -366,31 +313,18 @@
 
       // Found a campaign-like object with an ID
       if (obj.id && typeof obj.id === 'string') {
-        let shouldDispatch = false;
-
         const allDrops = this.collectAllDrops(obj);
         if (allDrops.length > 0) {
-          // Merge with existing drops for this campaign, upgrading any
-          // shallow entries a fuller response reveals
-          const { drops, changed } = mergeDropArrays(state.details[obj.id] || [], allDrops);
-          if (changed) {
-            state.details[obj.id] = drops;
-            shouldDispatch = true;
+          // Merge with existing drops for this campaign
+          const existingDrops = state.details[obj.id] || [];
+          const existingIds = new Set(existingDrops.map(d => d.id));
+          const newDrops = allDrops.filter(d => !existingIds.has(d.id));
+
+          if (newDrops.length > 0) {
+            state.details[obj.id] = [...existingDrops, ...newDrops];
+            dispatchCampaigns();
           }
         }
-
-        // Campaigns/drops restricted to specific channels — capture it
-        // wherever it turns up (any field shape, any game), not just on the
-        // narrower single-campaign query shape, since scan clicks can surface
-        // it via this generic scan instead
-        const restriction = findChannelRestriction(obj);
-        if (restriction) {
-          state.campaignMeta[obj.id] = { allow: restriction };
-          shouldDispatch = true;
-          diagLog.add(`Channel restriction found (searchDropsInResponse): campaign=${obj.id} channels=${restriction.channels.length}`);
-        }
-
-        if (shouldDispatch) dispatchCampaigns();
       }
 
       const items = Array.isArray(obj) ? obj : Object.values(obj);
@@ -450,20 +384,8 @@
           // Extract campaign details
           const details = extractors.campaignDetails(data);
           if (details) {
-            const { drops, changed } = mergeDropArrays(state.details[details.id] || [], details.timeBasedDrops);
-            let metaChanged = false;
-            if (changed) {
-              state.details[details.id] = drops;
-            }
-            // Campaigns/drops restricted to specific channels expose the list
-            // under one of a few possible field names — see findChannelRestriction
-            const restriction = findChannelRestriction(details);
-            if (restriction) {
-              state.campaignMeta[details.id] = { allow: restriction };
-              metaChanged = true;
-              diagLog.add(`Channel restriction found (campaignDetails): campaign=${details.id} channels=${restriction.channels.length}`);
-            }
-            if (changed || metaChanged) dispatchCampaigns();
+            state.details[details.id] = details.timeBasedDrops;
+            dispatchCampaigns();
           }
 
           // Search for drops in response
@@ -894,7 +816,6 @@
       const campaignCount = state.campaigns.length;
       const detailsCount = Object.keys(state.details).length;
       const totalDrops = Object.values(state.details).reduce((sum, drops) => sum + (drops?.length || 0), 0);
-      const channelRestrictedCount = Object.keys(state.campaignMeta).length;
 
       // Only push data to storage if we actually captured drop details.
       // Dispatching with 0 details would overwrite previously-good stored campaigns.
@@ -904,10 +825,10 @@
       const skipMsg = skippedFiltered > 0 ? tNotif('notif_done_skip', {filtered: skippedFiltered}) : '';
 
       // Log final result and dispatch for storage
-      diagLog.add(`Finalize: campaigns=${campaignCount} expanded=${totalExpanded} skipped=${skippedFiltered} details=${detailsCount} drops=${totalDrops} channelRestricted=${channelRestrictedCount}`);
+      diagLog.add(`Finalize: campaigns=${campaignCount} expanded=${totalExpanded} skipped=${skippedFiltered} details=${detailsCount} drops=${totalDrops}`);
       const resultStatus = detailsCount > 0 ? 'SUCCESS' : (totalExpanded === 0 ? 'NO_BUTTONS_CLICKED' : 'DETAILS_NOT_CAPTURED');
       diagLog.add(`Result: ${resultStatus}`);
-      const version = '1.3.12';
+      const version = '1.3.7';
       window.dispatchEvent(new CustomEvent('twitch-drops-diaglog', {
         detail: { log: diagLog.flush(version) }
       }));

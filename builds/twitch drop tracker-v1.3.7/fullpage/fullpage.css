@@ -670,68 +670,6 @@ body {
   height: 10px;
 }
 
-.streamer-badges {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-}
-
-.streamer-badges-label {
-  color: var(--text-muted);
-}
-
-.streamer-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: rgba(145, 71, 255, 0.15);
-  color: var(--accent-purple);
-  text-decoration: none;
-  font-weight: 500;
-  transition: background 0.15s ease;
-}
-
-.streamer-badge:hover {
-  background: rgba(145, 71, 255, 0.3);
-  text-decoration: underline;
-}
-
-.streamer-badges-more summary {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: rgba(134, 134, 134, 0.15);
-  color: var(--text-muted);
-  font-weight: 500;
-  cursor: pointer;
-  list-style: none;
-}
-
-.streamer-badges-more summary::-webkit-details-marker {
-  display: none;
-}
-
-.streamer-badges-more summary:hover {
-  background: rgba(134, 134, 134, 0.3);
-}
-
-.streamer-badges-more[open] {
-  flex-basis: 100%;
-}
-
-.streamer-badges-more[open] summary {
-  margin-bottom: 5px;
-}
-
-.streamer-badges-extra {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
 .drop-name {
   font-size: 13px;
   font-weight: 500;

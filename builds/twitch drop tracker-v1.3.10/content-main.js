@@ -907,7 +907,7 @@
       diagLog.add(`Finalize: campaigns=${campaignCount} expanded=${totalExpanded} skipped=${skippedFiltered} details=${detailsCount} drops=${totalDrops} channelRestricted=${channelRestrictedCount}`);
       const resultStatus = detailsCount > 0 ? 'SUCCESS' : (totalExpanded === 0 ? 'NO_BUTTONS_CLICKED' : 'DETAILS_NOT_CAPTURED');
       diagLog.add(`Result: ${resultStatus}`);
-      const version = '1.3.12';
+      const version = '1.3.10';
       window.dispatchEvent(new CustomEvent('twitch-drops-diaglog', {
         detail: { log: diagLog.flush(version) }
       }));

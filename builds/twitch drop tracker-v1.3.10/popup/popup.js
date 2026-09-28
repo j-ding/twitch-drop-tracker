@@ -96,44 +96,6 @@ async function copyDiagLog() {
 // =============================================================================
 // Settings
 // =============================================================================
-// Not distributed via the Chrome Web Store, so there's no built-in update
-// mechanism — this checks the manifest published on GitHub's main branch as
-// a lightweight stand-in. If that branch isn't kept in sync with releases,
-// or the request fails (offline, rate-limited, etc.), the note just stays
-// hidden rather than showing anything misleading.
-const GITHUB_MANIFEST_URL = 'https://raw.githubusercontent.com/j-ding/twitch-drop-tracker/main/manifest.json';
-
-function compareVersions(a, b) {
-  const pa = String(a).split('.').map(Number);
-  const pb = String(b).split('.').map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
-
-async function initVersionDisplay() {
-  const currentVersion = chrome.runtime.getManifest().version;
-  const label = document.getElementById('settings-version-label');
-  if (label) label.textContent = `Version ${currentVersion}`;
-
-  try {
-    const res = await fetch(GITHUB_MANIFEST_URL, { cache: 'no-store' });
-    if (!res.ok) return;
-    const remote = await res.json();
-    if (remote?.version && compareVersions(remote.version, currentVersion) > 0) {
-      const note = document.getElementById('update-available-note');
-      if (note) {
-        note.textContent = ` ⚠️ v${remote.version} available`;
-        note.classList.remove('hidden');
-      }
-    }
-  } catch {
-    // Offline or unreachable — no live check available, note stays hidden
-  }
-}
-
 function initSettings() {
   const settingsBtn = document.getElementById('settings-btn');
   const closeSettingsBtn = document.getElementById('close-settings-btn');
@@ -148,7 +110,6 @@ function initSettings() {
   });
 
   initLanguageSelector();
-  initVersionDisplay();
 
   const ramToggle = document.getElementById('ram-mode-toggle');
   if (ramToggle) {

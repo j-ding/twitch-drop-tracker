@@ -42,66 +42,36 @@ injectFilter();
 // =============================================================================
 // Campaign Data Transformation
 // =============================================================================
-// Some campaigns restrict drops to a specific list of channels — the known
-// shape is campaign.allow.channels (a campaign-wide restriction), but Twitch
-// doesn't guarantee that's the only place it ever puts this, and games may
-// restrict at the individual drop level instead of the whole campaign. Check
-// a handful of plausible field names/nesting at both levels rather than
-// hard-coding one path, so this keeps working if a future campaign type
-// shapes it differently.
-function extractChannelIdentity(ch) {
-  if (!ch || typeof ch !== 'object') return null;
-  const login = ch.login || ch.name || ch.channelLogin || null;
-  const displayName = ch.displayName || ch.name || login;
-  if (!login && !displayName) return null;
-  return { login, displayName: displayName || login };
-}
-
-function extractChannelsFromNode(node) {
-  if (!node || typeof node !== 'object') return [];
-  const raw = node.allow?.channels || node.channels || node.restrictedChannels || node.channelRestriction?.channels;
-  if (!Array.isArray(raw)) return [];
-  return raw.map(extractChannelIdentity).filter(Boolean);
-}
-
 function transformCampaigns(rawCampaigns) {
   return rawCampaigns
     .filter(c => c.status === 'ACTIVE')
-    .map(campaign => {
-      const channels = extractChannelsFromNode(campaign);
-
-      return {
-        id: campaign.id,
-        game: campaign.game?.displayName || campaign.name,
-        gameSlug: campaign.game?.slug || '',
-        publisher: campaign.owner?.name || '',
-        imageUrl: campaign.game?.boxArtURL?.replace('{width}', '80').replace('{height}', '107') || '',
-        startDate: campaign.startAt,
-        endDate: campaign.endAt,
-        detailsURL: campaign.detailsURL,
-        accountLinkURL: campaign.accountLinkURL,
-        isConnected: campaign.self?.isAccountConnected || false,
-        channels,
-        drops: (campaign.timeBasedDrops || []).map(drop => ({
-          id: drop.id,
-          name: drop.benefitEdges?.[0]?.benefit?.name || drop.name,
-          imageUrl: drop.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
-          requiredMinutes: drop.requiredMinutesWatched,
-          requiredSubs: drop.requiredSubs || 0,
-          startAt: drop.startAt,
-          endAt: drop.endAt,
-          progressMinutes: drop.self?.currentMinutesWatched || 0,
-          dropType: drop.dropType || (drop.requiredSubs > 0 ? 'sub' : 'watch'),
-          status: drop.self?.isClaimed ? 'claimed' :
-                  (drop.self?.currentMinutesWatched >= drop.requiredMinutesWatched) ? 'claimable' :
-                  (drop.self?.currentMinutesWatched > 0 || drop.self?.hasPreconditionsMet) ? 'in_progress' :
-                  'locked',
-          // A drop-level restriction (if Twitch ever ships one) takes
-          // priority over the campaign-wide list, since it's more specific
-          channels: extractChannelsFromNode(drop).length > 0 ? extractChannelsFromNode(drop) : channels
-        }))
-      };
-    });
+    .map(campaign => ({
+      id: campaign.id,
+      game: campaign.game?.displayName || campaign.name,
+      gameSlug: campaign.game?.slug || '',
+      publisher: campaign.owner?.name || '',
+      imageUrl: campaign.game?.boxArtURL?.replace('{width}', '80').replace('{height}', '107') || '',
+      startDate: campaign.startAt,
+      endDate: campaign.endAt,
+      detailsURL: campaign.detailsURL,
+      accountLinkURL: campaign.accountLinkURL,
+      isConnected: campaign.self?.isAccountConnected || false,
+      drops: (campaign.timeBasedDrops || []).map(drop => ({
+        id: drop.id,
+        name: drop.benefitEdges?.[0]?.benefit?.name || drop.name,
+        imageUrl: drop.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
+        requiredMinutes: drop.requiredMinutesWatched,
+        requiredSubs: drop.requiredSubs || 0,
+        startAt: drop.startAt,
+        endAt: drop.endAt,
+        progressMinutes: drop.self?.currentMinutesWatched || 0,
+        dropType: drop.dropType || (drop.requiredSubs > 0 ? 'sub' : 'watch'),
+        status: drop.self?.isClaimed ? 'claimed' :
+                (drop.self?.currentMinutesWatched >= drop.requiredMinutesWatched) ? 'claimable' :
+                (drop.self?.currentMinutesWatched > 0 || drop.self?.hasPreconditionsMet) ? 'in_progress' :
+                'locked'
+      }))
+    }));
 }
 
 // =============================================================================
