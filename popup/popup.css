@@ -925,6 +925,26 @@ body {
   opacity: 1;
 }
 
+.footer-fullview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  vertical-align: middle;
+}
+
+.footer-fullview-btn:hover {
+  background: var(--accent-purple);
+  border-color: var(--accent-purple);
+}
+
 .icon-btn.small {
   width: 24px;
   height: 24px;
