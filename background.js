@@ -90,6 +90,20 @@ const twitchAPI = {
 };
 
 // =============================================================================
+// Channel Identity
+// =============================================================================
+// Mirrors content-isolated.js's helper of the same name — channel-restricted
+// campaigns expose their allowed list as allow.channels, field names vary
+// (login/name/displayName), so pull whichever is present.
+function extractChannelIdentity(ch) {
+  if (!ch || typeof ch !== 'object') return null;
+  const login = ch.login || ch.name || ch.channelLogin || null;
+  const displayName = ch.displayName || ch.name || login;
+  if (!login && !displayName) return null;
+  return { login, displayName: displayName || login };
+}
+
+// =============================================================================
 // Data Fetching
 // =============================================================================
 const dataFetcher = {
@@ -189,6 +203,7 @@ const dataFetcher = {
           owner { id name }
           game { id displayName boxArtURL slug }
           self { isAccountConnected }
+          allow { channels { id login name displayName } }
           timeBasedDrops {
             id name startAt endAt requiredMinutesWatched requiredSubs
             benefitEdges { benefit { id name imageAssetURL } }
@@ -203,30 +218,36 @@ const dataFetcher = {
 
       return campaigns
         .filter(c => c.status === 'ACTIVE')
-        .map(c => ({
-          id: c.id,
-          game: c.game?.displayName || c.name,
-          gameSlug: c.game?.slug || '',
-          publisher: c.owner?.name || '',
-          imageUrl: twitchAPI.formatBoxArtUrl(c.game?.boxArtURL),
-          startDate: c.startAt,
-          endDate: c.endAt,
-          detailsURL: c.detailsURL,
-          accountLinkURL: c.accountLinkURL,
-          isConnected: c.self?.isAccountConnected || false,
-          drops: (c.timeBasedDrops || []).map(d => ({
-            id: d.id,
-            name: d.benefitEdges?.[0]?.benefit?.name || d.name,
-            imageUrl: d.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
-            requiredMinutes: d.requiredMinutesWatched,
-            requiredSubs: d.requiredSubs || 0,
-            startAt: d.startAt,
-            endAt: d.endAt,
-            progressMinutes: 0,
-            status: 'locked',
-            dropType: d.requiredSubs > 0 ? 'sub' : 'watch'
-          }))
-        }));
+        .map(c => {
+          const channels = (c.allow?.channels || [])
+            .map(extractChannelIdentity)
+            .filter(Boolean);
+          return {
+            id: c.id,
+            game: c.game?.displayName || c.name,
+            gameSlug: c.game?.slug || '',
+            publisher: c.owner?.name || '',
+            imageUrl: twitchAPI.formatBoxArtUrl(c.game?.boxArtURL),
+            startDate: c.startAt,
+            endDate: c.endAt,
+            detailsURL: c.detailsURL,
+            accountLinkURL: c.accountLinkURL,
+            isConnected: c.self?.isAccountConnected || false,
+            drops: (c.timeBasedDrops || []).map(d => ({
+              id: d.id,
+              name: d.benefitEdges?.[0]?.benefit?.name || d.name,
+              imageUrl: d.benefitEdges?.[0]?.benefit?.imageAssetURL || '',
+              requiredMinutes: d.requiredMinutesWatched,
+              requiredSubs: d.requiredSubs || 0,
+              startAt: d.startAt,
+              endAt: d.endAt,
+              progressMinutes: 0,
+              status: 'locked',
+              dropType: d.requiredSubs > 0 ? 'sub' : 'watch',
+              channels
+            }))
+          };
+        });
     } catch (error) {
       log.error('Failed to fetch campaigns:', error.message);
       return [];
@@ -580,6 +601,7 @@ const backgroundScraper = {
             owner { id name }
             game { id displayName boxArtURL slug }
             self { isAccountConnected }
+            allow { channels { id login name displayName } }
             timeBasedDrops {
               id
               name
@@ -612,6 +634,7 @@ const backgroundScraper = {
         dropCampaign(id: $id) {
           id
           name
+          allow { channels { id login name displayName } }
           timeBasedDrops {
             id
             name
@@ -644,7 +667,11 @@ const backgroundScraper = {
   transformCampaigns(rawCampaigns) {
     return rawCampaigns
       .filter(c => c.status === 'ACTIVE')
-      .map(c => ({
+      .map(c => {
+        const channels = (c.allow?.channels || [])
+          .map(extractChannelIdentity)
+          .filter(Boolean);
+        return {
         id: c.id,
         game: c.game?.displayName || c.name,
         gameSlug: c.game?.slug || '',
@@ -668,9 +695,11 @@ const backgroundScraper = {
           status: d.self?.isClaimed ? 'claimed' :
                   (d.self?.currentMinutesWatched >= d.requiredMinutesWatched) ? 'claimable' :
                   (d.self?.currentMinutesWatched > 0 || d.self?.hasPreconditionsMet) ? 'in_progress' :
-                  'locked'
+                  'locked',
+          channels
         }))
-      }));
+        };
+      });
   }
 };
 
