@@ -29,6 +29,8 @@ let allCampaigns = [];
 let searchQuery = '';
 let filterSearchQuery = '';
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('tdt_collapsed_sections') || '[]'));
+let liveChannels = {}; // lowercased login -> boolean, from the last checkChannelsLive()
+let lastInventory = {}; // so checkChannelsLive() can re-render the Progress tab once it resolves
 
 // =============================================================================
 // Initialization
@@ -316,6 +318,32 @@ function isGameFiltered(gameName) {
 // =============================================================================
 // Data Loading
 // =============================================================================
+// One-shot live-status check for every channel-restricted drop's badges.
+// Not polled — status is only ever as fresh as the last page load/refresh.
+async function checkChannelsLive() {
+  const logins = new Set();
+  for (const campaign of allCampaigns) {
+    for (const drop of campaign.drops || []) {
+      for (const ch of drop.channels || []) {
+        if (ch.login) logins.add(ch.login);
+      }
+    }
+  }
+  if (logins.size === 0) return;
+
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'checkChannelsLive', logins: [...logins] });
+    if (response?.success) {
+      liveChannels = response.live || {};
+      renderCampaigns(allCampaigns);
+      renderMyProgress(lastInventory);
+    }
+  } catch (error) {
+    // Live indicator is a nice-to-have, not critical — fail silently
+    log.error('Live-status check failed:', error.message);
+  }
+}
+
 async function loadStoredData() {
   try {
     const data = await chrome.storage.local.get(['campaigns', 'inventory', 'lastUpdated', 'gameFilter']);
@@ -326,8 +354,12 @@ async function loadStoredData() {
       allCampaigns = data.campaigns;
       populateFilterGames(allCampaigns);
       renderCampaigns(allCampaigns);
+      checkChannelsLive();
     }
-    if (data.inventory) renderMyProgress(data.inventory);
+    if (data.inventory) {
+      lastInventory = data.inventory;
+      renderMyProgress(data.inventory);
+    }
     if (data.lastUpdated) updateLastUpdated(data.lastUpdated);
     updateStats(data.campaigns || [], data.inventory || {});
   } catch (error) {
@@ -345,7 +377,9 @@ async function refreshData() {
       allCampaigns = response.campaigns || [];
       populateFilterGames(allCampaigns);
       renderCampaigns(allCampaigns);
-      renderMyProgress(response.inventory || {});
+      checkChannelsLive();
+      lastInventory = response.inventory || {};
+      renderMyProgress(lastInventory);
       updateLastUpdated(new Date().toISOString());
       updateStats(allCampaigns, response.inventory || {});
     } else {
@@ -503,6 +537,7 @@ function renderCampaignCard(campaign, urgency) {
           <div class="campaign-publisher">${escapeHtml(campaign.publisher || '')}</div>
           <div class="campaign-expiry ${expiryClass}">${t('expiry_prefix')}${formatExpiry(new Date(campaign.endDate))}</div>
         </div>
+        ${rescanButtonHtml(campaign.game)}
         <svg class="expand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
@@ -510,6 +545,16 @@ function renderCampaignCard(campaign, urgency) {
       <div class="campaign-drops">${dropsHtml}</div>
     </div>
   `;
+}
+
+function rescanButtonHtml(gameName) {
+  if (!gameName) return '';
+  return `<button class="campaign-rescan-btn" data-rescan-game="${escapeHtml(gameName)}" title="${t('rescan_game_title', {game: gameName})}">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 4v6h-6M1 20v-6h6"></path>
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+    </svg>
+  </button>`;
 }
 
 const DROP_ICON_EYE = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
@@ -526,17 +571,27 @@ function dropImageHtml(drop) {
 
 const CHANNEL_BADGE_CAP = 5;
 
+function isChannelLive(ch) {
+  const login = ch.login || ch.displayName;
+  return !!login && !!liveChannels[login.toLowerCase()];
+}
+
 function channelBadgeHtml(ch) {
   const login = ch.login || ch.displayName;
   if (!login) return '';
   const label = ch.displayName || ch.login;
-  return `<a class="streamer-badge" href="https://www.twitch.tv/${encodeURIComponent(login)}" target="_blank" rel="noopener noreferrer" title="${t('streamer_badge_title', {name: label})}">${escapeHtml(label)}</a>`;
+  const live = isChannelLive(ch);
+  const dot = live ? `<span class="live-dot" title="${t('streamer_live_now')}"></span>` : '';
+  return `<a class="streamer-badge${live ? ' is-live' : ''}" href="https://www.twitch.tv/${encodeURIComponent(login)}" target="_blank" rel="noopener noreferrer" title="${t('streamer_badge_title', {name: label})}">${dot}${escapeHtml(label)}</a>`;
 }
 
 function renderChannelBadges(channels) {
   if (!channels?.length) return '';
-  const visible = channels.slice(0, CHANNEL_BADGE_CAP).map(channelBadgeHtml).join('');
-  const rest = channels.slice(CHANNEL_BADGE_CAP);
+  // Live channels first, so the ones you can actually go watch right now
+  // aren't buried behind a "+N more" of mostly-offline names
+  const sorted = [...channels].sort((a, b) => isChannelLive(b) - isChannelLive(a));
+  const visible = sorted.slice(0, CHANNEL_BADGE_CAP).map(channelBadgeHtml).join('');
+  const rest = sorted.slice(CHANNEL_BADGE_CAP);
   const restHtml = rest.length
     ? `<details class="streamer-badges-more"><summary>${t('streamer_badges_more', {count: rest.length})}</summary><div class="streamer-badges-extra">${rest.map(channelBadgeHtml).join('')}</div></details>`
     : '';
@@ -618,11 +673,20 @@ async function renderMyProgress(inventory) {
       c.drops?.some(d => ['in_progress', 'claimable', 'claimed'].includes(d.status)))
     .sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
 
+  // The inventory-sourced claimable/claimed lists don't carry channel data
+  // themselves — look it up by drop id from the full campaign data we just fetched
+  const channelsByDropId = new Map();
+  for (const c of campaigns) {
+    for (const d of c.drops || []) {
+      if (d.id && d.channels?.length) channelsByDropId.set(d.id, d.channels);
+    }
+  }
+
   let html = '';
 
   if (claimable.length) {
     html += `<div class="section-header" style="color: var(--accent-purple);">${t('section_ready_to_claim', {count: claimable.length})}</div>`;
-    html += claimable.map(d => renderProgressCard(d, 'claimable')).join('');
+    html += claimable.map(d => renderProgressCard(d, 'claimable', channelsByDropId.get(d.dropId))).join('');
   }
 
   const inProgressCampaigns = activeCampaigns.filter(c =>
@@ -642,7 +706,7 @@ async function renderMyProgress(inventory) {
         </svg>
       </div>
       <div id="claimed-section" class="collapsible-content">
-        ${claimed.map(d => renderProgressCard(d, 'claimed')).join('')}
+        ${claimed.map(d => renderProgressCard(d, 'claimed', channelsByDropId.get(d.dropId))).join('')}
       </div>
     `;
   }
@@ -715,6 +779,7 @@ function renderProgressCampaignCard(campaign) {
           <span class="drop-name">${escapeHtml(drop.name || t('unknown_drop'))}</span>
           <span class="drop-status ${status.class}">${status.text}</span>
         </div>
+        ${renderChannelBadges(drop.channels)}
         ${showProgress ? `
           <div class="progress-container">
             <div class="progress-bar"><div class="progress-fill ${percentage >= 100 ? 'complete' : ''}" style="width: ${percentage}%"></div></div>
@@ -755,7 +820,7 @@ function renderProgressCampaignCard(campaign) {
   `;
 }
 
-function renderProgressCard(drop, type) {
+function renderProgressCard(drop, type, channels) {
   return `
     <div class="progress-card">
       <div class="progress-card-header">
@@ -765,6 +830,7 @@ function renderProgressCard(drop, type) {
           <div class="progress-card-drop">${escapeHtml(drop.name || t('unknown_drop'))}</div>
         </div>
       </div>
+      ${renderChannelBadges(channels)}
       ${type === 'claimable' ? `<button class="claim-btn">${t('btn_claim')}</button>` : ''}
     </div>
   `;
@@ -776,7 +842,7 @@ function renderProgressCard(drop, type) {
 function attachCardListeners(container) {
   container.querySelectorAll('.campaign-header').forEach(header => {
     header.addEventListener('click', (e) => {
-      if (e.target.classList.contains('campaign-image')) return;
+      if (e.target.classList.contains('campaign-image') || e.target.closest('.campaign-rescan-btn')) return;
       header.closest('.campaign-card').classList.toggle('expanded');
     });
   });
@@ -788,6 +854,17 @@ function attachCardListeners(container) {
       if (slug) {
         chrome.tabs.create({ url: `https://www.twitch.tv/directory/category/${slug}?filter=drops` });
       }
+    });
+  });
+
+  container.querySelectorAll('.campaign-rescan-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const game = btn.dataset.rescanGame;
+      if (!game) return;
+      chrome.tabs.create({ url: `https://www.twitch.tv/drops/campaigns?loadAllDrops=true&targetGame=${encodeURIComponent(game)}` });
+      btn.classList.add('scanning');
+      setTimeout(() => btn.classList.remove('scanning'), 3000);
     });
   });
 }

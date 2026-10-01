@@ -316,6 +316,30 @@ body {
   transform: rotate(180deg);
 }
 
+.campaign-rescan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.campaign-rescan-btn:hover {
+  color: var(--accent-purple);
+  border-color: var(--accent-purple);
+}
+
+.campaign-rescan-btn.scanning svg {
+  animation: spin 1s linear infinite;
+}
+
 /* Campaign Drops (Expanded) */
 .campaign-drops {
   display: none;
@@ -429,6 +453,17 @@ body {
 .streamer-badge:hover {
   background: rgba(145, 71, 255, 0.3);
   text-decoration: underline;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--danger);
+  margin-right: 3px;
+  vertical-align: middle;
+  box-shadow: 0 0 3px var(--danger);
 }
 
 .streamer-badges-more summary {

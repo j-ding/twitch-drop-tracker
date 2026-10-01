@@ -208,6 +208,13 @@
     return null;
   }
 
+  // Lowercase + strip accents, so a targeted single-game scan matches
+  // regardless of casing/accent differences between the stored game name and
+  // whatever Twitch's page renders (e.g. "pokémon" vs "Pokemon")
+  function normalizeGameName(name) {
+    return (name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  }
+
   // ==========================================================================
   // Data Extraction Utilities
   // ==========================================================================
@@ -735,17 +742,22 @@
     },
 
     /**
-     * Expand all campaigns sequentially
+     * Expand all campaigns sequentially, or — when targetGame is given — only
+     * the campaign(s) for that one game, skipping everything else without
+     * clicking it. Used for a quick per-game rescan triggered from a
+     * campaign card instead of a full "Load All Drop Details" pass.
      */
-    async expandAll() {
+    async expandAll(targetGame = null) {
       diagLog.start();
       diagLog.add(`Screen: ${window.screen.width}x${window.screen.height} devicePixelRatio=${window.devicePixelRatio}`);
+      if (targetGame) diagLog.add(`Targeted scan: game="${targetGame}"`);
       showSpeechBubble();
 
       // Check if filtering is active
       const activeGames = getActiveGameCount();
       const filterMsg = activeGames !== null ? ' ' + tNotif('notif_games_selected', {count: activeGames}) : '';
-      notification.show(tNotif('notif_keep_focused') + filterMsg, false, true);
+      const startMsg = targetGame ? tNotif('notif_scanning_game', {game: targetGame}) : (tNotif('notif_keep_focused') + filterMsg);
+      notification.show(startMsg, false, true);
       if (activeGames !== null) diagLog.add(`Filter active: ${activeGames} games selected`);
 
       // Try to keep the tab active by requesting visibility
@@ -772,10 +784,30 @@
       }
       if (retries >= 30) diagLog.add(`WARNING: No valid [aria-expanded] elements after 30s (total on page: ${document.querySelectorAll('[aria-expanded]').length}, GQL campaigns: ${state.campaigns.length})`);
 
+      // Resolve which campaign IDs belong to the target game, if any. Known
+      // up front from the campaign list GQL response that loads before any
+      // expand-clicking happens, so this doesn't need a DOM scan.
+      let targetCampaignIds = null;
+      if (targetGame) {
+        const normTarget = normalizeGameName(targetGame);
+        targetCampaignIds = new Set(
+          state.campaigns
+            .filter(c => normalizeGameName(c.game?.displayName || c.name) === normTarget)
+            .map(c => c.id)
+        );
+        diagLog.add(`Targeted scan matched ${targetCampaignIds.size} campaign(s) for "${targetGame}"`);
+        if (targetCampaignIds.size === 0) {
+          diagLog.add('WARNING: No active campaigns matched target game — nothing to scan');
+          await this.finalize(0, 0);
+          return;
+        }
+      }
+      const targetProcessedIds = targetCampaignIds ? new Set() : null;
 
       let totalExpanded = 0;
       let skippedFiltered = 0;
       let skippedExpired = 0;
+      let skippedOtherGame = 0;
       const clickedButtons = new Set();
       let exitReason = 'max_iterations';
 
@@ -805,10 +837,20 @@
           const btnId = this.getButtonId(btn);
           if (clickedButtons.has(btnId)) continue;
 
-          // Check if this campaign's game is allowed by the filter
           const matchedCampaign = findCampaignForButton(btn);
           const gameName = matchedCampaign?.game?.displayName || matchedCampaign?.name || null;
-          if (gameName && !isGameAllowed(gameName)) {
+
+          if (targetCampaignIds) {
+            // Targeted scan: only touch buttons for the target game's campaign(s).
+            // Bypasses the persisted game filter — clicking this button is an
+            // explicit one-off request for this game's data.
+            if (!matchedCampaign || !targetCampaignIds.has(matchedCampaign.id)) {
+              clickedButtons.add(btnId);
+              skippedOtherGame++;
+              continue;
+            }
+          } else if (gameName && !isGameAllowed(gameName)) {
+            // Check if this campaign's game is allowed by the filter
             clickedButtons.add(btnId);
             skippedFiltered++;
             continue;
@@ -830,6 +872,7 @@
           clickedButtons.add(btnId);
           totalExpanded++;
           expandedThisRound++;
+          if (targetProcessedIds && matchedCampaign) targetProcessedIds.add(matchedCampaign.id);
 
           // Wait for API responses to settle (smart wait for large campaigns)
           await this.waitForApiResponse(responseTimeBefore);
@@ -848,9 +891,18 @@
             const skipMsg = skippedFiltered > 0 ? tNotif('notif_loading_skip', {skipped: skippedFiltered}) : '';
             notification.update(tNotif('notif_loading_count', {count: Object.keys(state.details).length}) + skipMsg);
           }
+
+          // Targeted scan: stop as soon as every matching campaign is done —
+          // no need to keep scrolling through the rest of the page
+          if (targetProcessedIds && targetProcessedIds.size >= targetCampaignIds.size) break;
         }
 
-        diagLog.add(`Iteration ${i}: clicked=${expandedThisRound} totalExpanded=${totalExpanded} skippedFiltered=${skippedFiltered} skippedExpired=${skippedExpired} details=${Object.keys(state.details).length}`);
+        diagLog.add(`Iteration ${i}: clicked=${expandedThisRound} totalExpanded=${totalExpanded} skippedFiltered=${skippedFiltered} skippedExpired=${skippedExpired} skippedOtherGame=${skippedOtherGame} details=${Object.keys(state.details).length}`);
+
+        if (targetProcessedIds && targetProcessedIds.size >= targetCampaignIds.size) {
+          exitReason = 'target_game_complete';
+          break;
+        }
 
         // Scroll to find more buttons
         if (expandedThisRound === 0) {
@@ -907,7 +959,7 @@
       diagLog.add(`Finalize: campaigns=${campaignCount} expanded=${totalExpanded} skipped=${skippedFiltered} details=${detailsCount} drops=${totalDrops} channelRestricted=${channelRestrictedCount}`);
       const resultStatus = detailsCount > 0 ? 'SUCCESS' : (totalExpanded === 0 ? 'NO_BUTTONS_CLICKED' : 'DETAILS_NOT_CAPTURED');
       diagLog.add(`Result: ${resultStatus}`);
-      const version = '1.3.12';
+      const version = '1.3.13';
       window.dispatchEvent(new CustomEvent('twitch-drops-diaglog', {
         detail: { log: diagLog.flush(version) }
       }));
@@ -1021,7 +1073,7 @@
   function checkForExpandRequest() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('loadAllDrops') === 'true') {
-      campaignExpander.expandAll();
+      campaignExpander.expandAll(params.get('targetGame') || null);
     }
   }
 

@@ -675,6 +675,50 @@ const backgroundScraper = {
 };
 
 // =============================================================================
+// Channel Live-Status Lookup
+// =============================================================================
+// Used to show which streamers from a channel-restricted drop are live right
+// now. Checked on demand (popup open / refresh), not polled continuously —
+// live status is inherently stale the moment it's fetched, so there's no
+// point paying for a background poll loop just to narrow that window.
+const channelLiveChecker = {
+  CHUNK_SIZE: 100,
+
+  async check(logins) {
+    const unique = [...new Set((logins || []).filter(Boolean).map(l => l.toLowerCase()))];
+    if (unique.length === 0) return {};
+
+    const authToken = await twitchAPI.getAuthToken();
+    if (!authToken) return {};
+
+    const query = `
+      query ChannelsLiveStatus($logins: [String!]) {
+        users(logins: $logins) {
+          login
+          stream { id }
+        }
+      }
+    `;
+
+    const live = {};
+    for (let i = 0; i < unique.length; i += this.CHUNK_SIZE) {
+      const chunk = unique.slice(i, i + this.CHUNK_SIZE);
+      try {
+        const data = await twitchAPI.graphqlRequest(authToken, query, { logins: chunk });
+        for (const user of data.data?.users || []) {
+          if (user?.login) live[user.login.toLowerCase()] = !!user.stream;
+        }
+      } catch (error) {
+        log.error('Channel live-status check failed:', error.message);
+        // Keep whatever chunks succeeded — a partial live map is still useful
+      }
+    }
+
+    return live;
+  }
+};
+
+// =============================================================================
 // Message Handlers
 // =============================================================================
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -748,6 +792,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       storage.get(['diagLog', 'diagLogDate'])
         .then(({ diagLog, diagLogDate }) => sendResponse({ success: true, log: diagLog || null, date: diagLogDate || null }))
         .catch(() => sendResponse({ success: false, log: null }));
+      return true;
+
+    case 'checkChannelsLive':
+      channelLiveChecker.check(request.logins)
+        .then(live => sendResponse({ success: true, live }))
+        .catch(error => sendResponse({ success: false, live: {}, error: error.message }));
       return true;
 
     default:
