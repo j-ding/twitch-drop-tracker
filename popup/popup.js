@@ -20,6 +20,10 @@ let filterSearchQuery = '';
 let collapsedSections = new Set(JSON.parse(localStorage.getItem('tdt_collapsed_sections') || '[]'));
 let liveChannels = {}; // lowercased login -> boolean, from the last checkChannelsLive()
 let lastInventory = {}; // so checkChannelsLive() can re-render the Progress tab once it resolves
+// Which campaign cards are expanded, so a re-render (e.g. the live-status
+// check resolving a second after load) doesn't collapse a card you just opened.
+// In-memory only — reopening the popup starts fresh, which matches expectations.
+let expandedCards = new Set();
 
 // =============================================================================
 // Initialization
@@ -631,7 +635,7 @@ function renderCampaignCard(campaign, urgency) {
   const gameSlug = campaign.gameSlug || gameNameToSlug(campaign.game);
 
   return `
-    <div class="campaign-card ${urgencyClass} ${isCompleted ? 'completed' : ''} ${filteredClass}" data-id="${campaign.id || ''}">
+    <div class="campaign-card ${urgencyClass} ${isCompleted ? 'completed' : ''} ${filteredClass} ${expandedCards.has(campaign.id) ? 'expanded' : ''}" data-id="${campaign.id || ''}">
       <div class="campaign-header">
         <img class="campaign-image clickable" src="${campaign.imageUrl || ''}" alt="" onerror="this.style.display='none'" data-game-slug="${gameSlug}" title="Open ${escapeHtml(campaign.game)} drops on Twitch">
         <div class="campaign-info">
@@ -912,7 +916,7 @@ function renderProgressCampaignCard(campaign) {
   const gameSlug = campaign.gameSlug || gameNameToSlug(campaign.game);
 
   return `
-    <div class="campaign-card ${urgencyClass}">
+    <div class="campaign-card ${urgencyClass} ${expandedCards.has('p:' + campaign.id) ? 'expanded' : ''}" data-id="p:${campaign.id || ''}">
       <div class="campaign-header">
         <img class="campaign-image clickable" src="${campaign.imageUrl || ''}" alt="" onerror="this.style.display='none'" data-game-slug="${gameSlug}" title="Open ${escapeHtml(campaign.game)} drops on Twitch">
         <div class="campaign-info">
@@ -956,7 +960,11 @@ function attachCardListeners(container) {
     header.addEventListener('click', (e) => {
       // Don't toggle if clicking on the game image or the rescan button
       if (e.target.classList.contains('campaign-image') || e.target.closest('.campaign-rescan-btn')) return;
-      header.closest('.campaign-card').classList.toggle('expanded');
+      const card = header.closest('.campaign-card');
+      const nowExpanded = card.classList.toggle('expanded');
+      // Remember the state so a re-render (live-status check, refresh) keeps it
+      const id = card.dataset.id;
+      if (id) nowExpanded ? expandedCards.add(id) : expandedCards.delete(id);
     });
   });
 

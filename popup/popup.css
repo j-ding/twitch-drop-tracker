@@ -460,10 +460,10 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--danger);
+  background: var(--success);
   margin-right: 3px;
   vertical-align: middle;
-  box-shadow: 0 0 3px var(--danger);
+  box-shadow: 0 0 3px var(--success);
 }
 
 .streamer-badges-more summary {
